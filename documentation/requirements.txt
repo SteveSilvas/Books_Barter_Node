@@ -1,0 +1,24 @@
+##Justificativa
+    Alguns leitores gostam de colecionar seus livros prediletos porém são muitos os livros que passam 
+pelas nossas vidas e muitas vezes fica difícil guardá-los em segurança. Mesmo que consigamos cuidar
+bem dos nossos livros, com o tempo teremos mais do que podemos guardar. Após terminar um, buscamos outro 
+em sebos e livrarias ou ganhamos diversos livros os quais não temos interesse em ler. O que fazer com
+esses bens que deixaram de ser mercadorias e não podem ser considerados lixo?   
+    A solução mais comum é fazer trocas e empréstimos entre amigos mas, já virou meme, que livros emprestados não retornam.
+Para as trocas, acontecem alguns eventos e feiras de livros porém isso não garante a satisfação do leitor uma vez que dificilmente
+ele vai encontrar o exato livro que deseja, ou não vai conseguir trocar pelo livro que tem em mãos. Com vista neste problema propomos
+aqui a construção de uma solução de software que permita aos leitores compartilharem os livros que pretendem desapegar e buscar seus 
+livros de interesse adquirindo-os por meio de escambo negociado diretamente com o proprietário.
+
+## Requerimentos ##
+- Para acessar o sistema é necessário estar logado com o google ou cadastrado;
+- O usuário pode ver e editar perfil;
+- O sisema permite aos usuários cadastrar seus livros criando uma estante digital pública;
+- Uma vez que publicados outros usuários podem visualizar esta estante digital;
+- Os usuários podem seguir e deixar de seguir uns aos outros;
+- Os usuários podem favoritar e desfavoritar estantes e livros para ver futuramente;
+- Os usuários podem abrir chat de negociação para escambar um livro de interesse;
+
+Interagem com o sistema:
+Usuários que cadastram seus livros e interagem com a comunidade a fim de encontrar livros de interesse 
+e se desfazer de exemplares que não precisa.
