@@ -4,16 +4,16 @@ const UserRoute = Router();
 
 UserRoute.get('/users', UserController.ListAll);
 
-UserRoute.post('/users/add', UserController.addUser);
+UserRoute.post('/users/add', UserController.Create);
 
-UserRoute.post('/users/login', UserController.login);
+UserRoute.post('/users/login', UserController.Login);
 
 UserRoute.get('/users/:id', UserController.GetById);
 
-UserRoute.get('/users/:email', UserController.GetByEmail);
+UserRoute.get('/users/email/:email', UserController.GetByEmail);
 
-UserRoute.put('/users/update', UserController.updateUser);
+UserRoute.put('/users/update', UserController.Update);
 
-UserRoute.delete('/users/delete', UserController.deleteUser)
+UserRoute.delete('/users/delete', UserController.Delete)
 
 export default UserRoute;

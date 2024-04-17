@@ -21,6 +21,7 @@ module.exports = database.define('User', {
     Email: {
         type: DataTypes.STRING,
         allowNull: false,
+        unique: true
     },
     Pass: {
         type: DataTypes.STRING,

@@ -21,6 +21,7 @@ module.exports = database.define('User', {
     Email: {
         type: sequelize_1.DataTypes.STRING,
         allowNull: false,
+        unique: true
     },
     Pass: {
         type: sequelize_1.DataTypes.STRING,

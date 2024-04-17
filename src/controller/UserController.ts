@@ -1,12 +1,19 @@
 const UserEntity = require("../entity/UserEntity");
 import e, { Request, Response, NextFunction } from "express";
 import StatusCodes from "http-status-codes";
-
+import { userService } from "../Services/UserService";
+import { UserType } from "../@types/UserType";
+import { LoginType } from "../@types/LoginType";
 module.exports = {
     async ListAll(req: Request, res: Response) {
         try {
-            const usersList = await UserEntity.findAll();
-            return res.status(StatusCodes.OK).json(usersList);
+            console.log("list alll");
+            const usersList: UserType[] = await userService.GetUsers();
+            if (usersList) {
+                return res.status(StatusCodes.OK).json(usersList);
+            } else {
+                return res.status(StatusCodes.NO_CONTENT).send([]);
+            }
         } catch (error) {
             return res
                 .status(StatusCodes.BAD_REQUEST)
@@ -16,7 +23,15 @@ module.exports = {
 
     async GetById(req: Request, res: Response) {
         try {
-            const user = await UserEntity.findByPk(req.params.Id);
+            const user: UserType = await userService.GetById(
+                Number(req.params.id)
+            );
+            if (!user) {
+                return res
+                    .status(StatusCodes.NOT_FOUND)
+                    .send("Usuário não encontrado");
+            }
+
             return res.status(StatusCodes.OK).json(user);
         } catch (error) {
             return res
@@ -27,15 +42,15 @@ module.exports = {
 
     async GetByEmail(req: Request, res: Response) {
         try {
-            const users = await UserEntity.findAll();
-            users.map((user: any) => {
-                if (user.Email === req.params.Email) {
-                    return res.status(StatusCodes.OK).json(user);
-                }
-            });
-            return res
-                .status(StatusCodes.BAD_REQUEST)
-                .json("Usuário não encontrado com o email " + req.params.Email);
+            const user: UserType = await userService.GetByEmail(
+                req.params.email
+            );
+            if (!user) {
+                return res
+                    .status(StatusCodes.NOT_FOUND)
+                    .send("Usuário não encontrado");
+            }
+            return res.status(StatusCodes.OK).json(user);
         } catch (error) {
             return res
                 .status(StatusCodes.BAD_REQUEST)
@@ -43,46 +58,49 @@ module.exports = {
         }
     },
 
-    async addUser(req: Request, res: Response, next: NextFunction) {
+    async Create(req: Request, res: Response, next: NextFunction) {
         try {
-            const user = await UserEntity.create({
+            const user = await userService.GetByEmail(req.body.Email);
+            if (user) {
+                return res
+                    .status(StatusCodes.CREATED)
+                    .json("Já existe usuário cadastrado com este email.");
+            }
+
+            const body: UserType = {
+                Id: 0,
                 Name: req.body.Name,
                 Birth: req.body.Birth,
                 Email: req.body.Email,
                 Pass: req.body.Pass,
-            });
-            return res
-                .status(StatusCodes.CREATED)
-                .json("Usuário adicionado com sucesso.");
+            };
+
+            const userCreated: UserType = await userService.Create(body);
+
+            if (userCreated) {
+                return res
+                    .status(StatusCodes.CREATED)
+                    .json("Usuário adicionado com sucesso.");
+            }
         } catch (error) {
+            console.error(error);
             return res
-                .status(StatusCodes.BAD_REQUEST)
-                .send("Erro ao adicionar usuário: " + error);
+                .status(StatusCodes.INTERNAL_SERVER_ERROR)
+                .json("Ocorreu um erro ao adicionar o usuário.");
         }
     },
 
-    async login(req: Request, res: Response, next: NextFunction) {
+    async Login(req: Request, res: Response, next: NextFunction) {
         try {
-            const email: string = req.body.Email;
-            const pass: string = req.body.Pass;
-    
-            const users = await UserEntity.findAll();
+            const loginDatas: LoginType = {
+                Email: req.body.Email,
+                Pass: req.body.Pass,
+            };
 
-            let error: string = "";
-            var userWithThisEmail = users.filter(
-                (r: any) => r.dataValues.Email == email
-            );
-
-            if (userWithThisEmail == "") {
-                error = "Não existe usuário cadastrado com este email.";
-                return res.status(StatusCodes.UNAUTHORIZED).send(error);
-            } else {
-                if (userWithThisEmail[0].dataValues.Pass == pass) {
-                    return res.status(StatusCodes.OK).send({message: "Usuário logado com sucesso", data: userWithThisEmail[0]});
-                } else {
-                    error = "Senha incorreta.";
-                    return res.status(StatusCodes.UNAUTHORIZED).send(error);
-                }
+            const login = await userService.Login(loginDatas);
+            if (login) {
+                console.log(login);
+                return res.status(StatusCodes.OK).send(login);
             }
         } catch (error) {
             console.log(error);
@@ -93,19 +111,24 @@ module.exports = {
         }
     },
 
-    async updateUser(req: Request, res: Response) {
+    async Update(req: Request, res: Response) {
         try {
-            const userEntity = await UserEntity.findByPk(req.body.Id);
-            if (userEntity) {
-                (userEntity.Name = req.body.Name),
-                    (userEntity.Email = req.body.Email),
-                    (userEntity.Nascimento = req.body.Nascimento);
-                userEntity.save();
-            }
 
-            return res
+            const body: UserType = {
+                Id: req.body.Id,
+                Name: req.body.Name,
+                Birth: req.body.Birth,
+                Email: req.body.Email,
+                Pass: req.body.Pass,
+            };
+
+            const user = await userService.Update(body);
+
+            if(user){
+                return res
                 .status(StatusCodes.OK)
                 .send("Usuário alterado com sucesso.");
+            }
         } catch (error) {
             return res
                 .status(StatusCodes.BAD_REQUEST)
@@ -113,7 +136,7 @@ module.exports = {
         }
     },
 
-    async deleteUser(req: Request, res: Response) {
+    async Delete(req: Request, res: Response) {
         try {
             const userEntity = await UserEntity.findByPk(req.body.Id);
             await userEntity.destroy();

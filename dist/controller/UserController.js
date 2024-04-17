@@ -14,115 +14,152 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const UserEntity = require("../entity/UserEntity");
 const http_status_codes_1 = __importDefault(require("http-status-codes"));
+const UserService_1 = require("../Services/UserService");
 module.exports = {
     ListAll(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                const usersList = yield UserEntity.findAll();
-                return res.status(http_status_codes_1.default.OK).json(usersList);
+                console.log("list alll");
+                const usersList = yield UserService_1.userService.GetUsers();
+                if (usersList) {
+                    return res.status(http_status_codes_1.default.OK).json(usersList);
+                }
+                else {
+                    return res.status(http_status_codes_1.default.NO_CONTENT).send([]);
+                }
             }
             catch (error) {
-                return res.status(http_status_codes_1.default.BAD_REQUEST).send("Erro na lista de usuários: " + error);
+                return res
+                    .status(http_status_codes_1.default.BAD_REQUEST)
+                    .send("Erro na lista de usuários: " + error);
             }
         });
     },
     GetById(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                const user = yield UserEntity.findByPk(req.params.Id);
+                const user = yield UserService_1.userService.GetById(Number(req.params.id));
+                if (!user) {
+                    return res
+                        .status(http_status_codes_1.default.NOT_FOUND)
+                        .send("Usuário não encontrado");
+                }
                 return res.status(http_status_codes_1.default.OK).json(user);
             }
             catch (error) {
-                return res.status(http_status_codes_1.default.BAD_REQUEST).send("Erro ao buscar usuário: " + req.params.Id);
+                return res
+                    .status(http_status_codes_1.default.BAD_REQUEST)
+                    .send("Erro ao buscar usuário: " + req.params.Id);
             }
         });
     },
     GetByEmail(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                const users = yield UserEntity.findAll();
-                users.map((user) => {
-                    if (user.Email === req.params.Email) {
-                        return res.status(http_status_codes_1.default.OK).json(user);
-                    }
-                });
-                return res
-                    .status(http_status_codes_1.default.BAD_REQUEST)
-                    .json("Usuário não encontrado com o email " + req.params.Email);
+                const user = yield UserService_1.userService.GetByEmail(req.params.email);
+                if (!user) {
+                    return res
+                        .status(http_status_codes_1.default.NOT_FOUND)
+                        .send("Usuário não encontrado");
+                }
+                return res.status(http_status_codes_1.default.OK).json(user);
             }
             catch (error) {
-                return res.status(http_status_codes_1.default.BAD_REQUEST).send("Erro ao buscar usuário: " + req.params.Email);
+                return res
+                    .status(http_status_codes_1.default.BAD_REQUEST)
+                    .send("Erro ao buscar usuário: " + req.params.Email);
             }
         });
     },
-    addUser(req, res, next) {
+    Create(req, res, next) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                const user = yield UserEntity.create({
+                const user = yield UserService_1.userService.GetByEmail(req.body.Email);
+                if (user) {
+                    return res
+                        .status(http_status_codes_1.default.CREATED)
+                        .json("Já existe usuário cadastrado com este email.");
+                }
+                const body = {
+                    Id: 0,
                     Name: req.body.Name,
                     Birth: req.body.Birth,
                     Email: req.body.Email,
                     Pass: req.body.Pass,
-                });
-                return res.status(http_status_codes_1.default.CREATED).send("Usuário adicionado com sucesso.");
-            }
-            catch (error) {
-                return res.status(http_status_codes_1.default.BAD_REQUEST).send("Erro ao adicionar usuário: " + error);
-            }
-        });
-    },
-    login(req, res, next) {
-        return __awaiter(this, void 0, void 0, function* () {
-            try {
-                const users = yield UserEntity.findAll();
-                let found = false;
-                users.map((user) => {
-                    if (user.Email == req.body.data.Email) {
-                        if (user.Pass == req.body.data.Pass) {
-                            found = true;
-                            return res.status(http_status_codes_1.default.OK).send(user);
-                        }
-                        else {
-                            return res.status(http_status_codes_1.default.BAD_REQUEST).send("Senhas não conferem");
-                        }
-                    }
-                });
-                // if (!found) {
-                //     return res.status(StatusCodes.BAD_REQUEST).send("Usuário não encontrado");
-                // }
-            }
-            catch (error) {
-                // return res.status(StatusCodes.BAD_REQUEST).send("Erro no login usuário: " + error);
-                console.log(error);
-            }
-        });
-    },
-    updateUser(req, res) {
-        return __awaiter(this, void 0, void 0, function* () {
-            try {
-                const userEntity = yield UserEntity.findByPk(req.body.Id);
-                if (userEntity) {
-                    (userEntity.Name = req.body.Name),
-                        (userEntity.Email = req.body.Email),
-                        (userEntity.Nascimento = req.body.Nascimento);
-                    userEntity.save();
+                };
+                const userCreated = yield UserService_1.userService.Create(body);
+                if (userCreated) {
+                    return res
+                        .status(http_status_codes_1.default.CREATED)
+                        .json("Usuário adicionado com sucesso.");
                 }
-                return res.status(http_status_codes_1.default.OK).send("Usuário alterado com sucesso.");
             }
             catch (error) {
-                return res.status(http_status_codes_1.default.BAD_REQUEST).send("Erro ao alterar usuário: " + error);
+                console.error(error);
+                return res
+                    .status(http_status_codes_1.default.INTERNAL_SERVER_ERROR)
+                    .json("Ocorreu um erro ao adicionar o usuário.");
             }
         });
     },
-    deleteUser(req, res) {
+    Login(req, res, next) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const loginDatas = {
+                    Email: req.body.Email,
+                    Pass: req.body.Pass,
+                };
+                const login = yield UserService_1.userService.Login(loginDatas);
+                if (login) {
+                    console.log(login);
+                    return res.status(http_status_codes_1.default.OK).send(login);
+                }
+            }
+            catch (error) {
+                console.log(error);
+                return res
+                    .status(http_status_codes_1.default.BAD_REQUEST)
+                    .send("Erro no login usuário: " + error);
+            }
+        });
+    },
+    Update(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const body = {
+                    Id: req.body.Id,
+                    Name: req.body.Name,
+                    Birth: req.body.Birth,
+                    Email: req.body.Email,
+                    Pass: req.body.Pass,
+                };
+                const user = yield UserService_1.userService.Update(body);
+                if (user) {
+                    return res
+                        .status(http_status_codes_1.default.OK)
+                        .send("Usuário alterado com sucesso.");
+                }
+            }
+            catch (error) {
+                return res
+                    .status(http_status_codes_1.default.BAD_REQUEST)
+                    .send("Erro ao alterar usuário: " + error);
+            }
+        });
+    },
+    Delete(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const userEntity = yield UserEntity.findByPk(req.body.Id);
                 yield userEntity.destroy();
-                return res.status(http_status_codes_1.default.OK).send("Usuário excluído com sucesso.");
+                return res
+                    .status(http_status_codes_1.default.OK)
+                    .send("Usuário excluído com sucesso.");
             }
             catch (error) {
-                return res.status(http_status_codes_1.default.BAD_REQUEST).send("Erro ao deletar usuário: " + error);
+                return res
+                    .status(http_status_codes_1.default.BAD_REQUEST)
+                    .send("Erro ao deletar usuário: " + error);
             }
         });
     },
