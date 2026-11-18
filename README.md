@@ -1,9 +1,17 @@
-# 📚 EscamboLiterário — API de Escambo de Livros
+# 📚 Books Barter Node — API de Escambo de Livros
 
-API REST em **Node.js + TypeScript** que dá suporte a uma plataforma de troca (escambo) de livros
-entre leitores. Este documento descreve **as regras de negócio do produto** (o que o sistema deve
-fazer) e mostra, em seguida, **como a API atual se posiciona em relação a elas** — o que já está
-implementado, o que está parcial e o que ainda falta.
+API REST em **Node.js + TypeScript** que dá suporte à plataforma de **escambo (troca) de livros**
+entre leitores. Este repositório contém **apenas o backend**.
+
+> Este é um **sub-repositório** do projeto [**Books Barter / EscamboLiterário**](https://github.com/SteveSilvas/Books_Barter).
+> A **proposta**, as **regras gerais de negócio** e a **documentação de arquitetura e especificação**
+> ficam no repositório principal. Aqui você encontra o que é específico da API: **como rodar**,
+> endpoints, modelos de dados, testes e decisões de implementação.
+
+* 🌐 Repositório principal: [SteveSilvas/Books_Barter](https://github.com/SteveSilvas/Books_Barter)
+* 📱 App mobile: [SteveSilvas/Livro_Por_Livro_React_Native](https://github.com/SteveSilvas/Livro_Por_Livro_React_Native)
+* 📄 Especificação da API: [docs/spec.md](https://github.com/SteveSilvas/Books_Barter/blob/main/docs/spec.md)
+* 🏗️ Arquitetura: [docs/architecture.md](https://github.com/SteveSilvas/Books_Barter/blob/main/docs/architecture.md)
 
 > O pacote está registrado como `escambo-literario-api` no `package.json`.
 >
@@ -12,38 +20,11 @@ implementado, o que está parcial e o que ainda falta.
 
 ---
 
-## 🎯 Objetivo do produto
+## ✅ Cobertura das regras de negócio
 
-Alguns leitores gostam de colecionar seus livros prediletos, mas com o tempo acumulam mais do que
-conseguem guardar. A troca entre amigos é a solução mais comum, porém nem sempre garante que o leitor
-encontre o exato livro que deseja. A proposta deste sistema é permitir que os leitores compartilhem
-os livros dos quais pretendem se desapegar e encontrem seus livros de interesse por meio de
-**escambo negociado diretamente com o proprietário**.
+A API implementa as regras gerais definidas no repositório principal. Resumo do status:
 
----
-
-## 📋 Regras de negócio (a cumprir)
-
-Estas são as regras gerais que a solução deve atender (baseadas em `documentation/requirements.txt`).
-Elas são a referência do projeto — o código é apenas uma parte do que ainda precisa ser construído.
-
-1. **Acesso autenticado:** para acessar o sistema é necessário estar logado (com o Google) ou cadastrado.
-2. **Perfil do usuário:** o usuário pode ver e editar o próprio perfil.
-3. **Estante digital:** o usuário pode cadastrar seus livros, criando uma estante digital pública.
-4. **Visibilidade pública:** uma vez publicados, outros usuários podem visualizar essa estante digital.
-5. **Rede social:** os usuários podem seguir e deixar de seguir uns aos outros.
-6. **Favoritos:** os usuários podem favoritar e desfavoritar estantes e livros para ver futuramente.
-7. **Negociação por chat:** os usuários podem abrir um chat de negociação para escambar um livro de interesse.
-
-**Atores:** usuários que cadastram seus livros e interagem com a comunidade para encontrar livros de
-interesse e se desfazer de exemplares que não precisam.
-
----
-
-## ✅ Cobertura atual: regras × API
-
-A tabela abaixo cruza cada regra de negócio com o que existe hoje no código. Use-a como mapa do que
-já foi entregue e do que ainda precisa ser desenvolvido.
+**Legenda:** ✅ implementado · 🟡 parcial · 🔴 pendente.
 
 | # | Regra de negócio | Status | O que existe no código hoje |
 |---|------------------|--------|------------------------------|
@@ -54,8 +35,6 @@ já foi entregue e do que ainda precisa ser desenvolvido.
 | 5 | Seguir / deixar de seguir | ✅ Implementado | Model `Follow` (`FollowerId`/`FollowingId`, par único). `POST/DELETE /users/:uuid/follow` (🔒) e listagens `GET /users/:uuid/followers` e `/following` (paginadas). Não seguir a si mesmo (400), duplicado (409). Contadores `followersCount`/`followingCount` no perfil público. |
 | 6 | Favoritar / desfavoritar | ✅ Implementado | Duas entidades: `FavoriteShelf` (estante) e `FavoriteBook` (livro). `POST/DELETE /users/:uuid/favorite` e `POST/DELETE /books/:uuid/favorite` (🔒). Listagens privadas `GET /users/me/favorites/shelves` e `/books` (paginadas). Não favoritar o próprio item (400), duplicado (409). |
 | 7 | Chat de negociação | 🔴 Pendente | Não implementado (sem entidades de conversa/mensagem). |
-
-**Legenda:** ✅ implementado · 🟡 parcial · 🔴 pendente.
 
 ### Recursos de apoio já disponíveis
 
@@ -587,6 +566,32 @@ Para checar os tipos dos testes:
 
 ```bash
 npm run typecheck
+```
+
+---
+
+## 🐳 Docker
+
+O projeto inclui um `Dockerfile` multi-stage (build com TypeScript → runtime enxuto com apenas as
+dependências de produção).
+
+```bash
+# build da imagem
+docker build -t books-barter-api .
+
+# execução (a API usa MySQL; aponte as variáveis para um MySQL acessível)
+docker run --rm -p 3000:3000 --env-file .env books-barter-api
+```
+
+> ⚠️ Em **produção** o dialeto esperado é o **MySQL** (`DB_DIALECT=mysql`). O driver `sqlite3` é uma
+> dependência de **desenvolvimento** (usada nos testes) e **não** é instalado na imagem de runtime.
+> Para rodar a API com MySQL via Docker Compose, suba um serviço `mysql:8` e aponte `DB_HOST` para ele.
+
+Verifique a saúde após subir o container:
+
+```bash
+curl http://localhost:3000/status
+# => {"status":"ok","message":"API em funcionamento."}
 ```
 
 ---
