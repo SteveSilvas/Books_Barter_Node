@@ -42,5 +42,8 @@
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   },
-  "keywords": []
+  "keywords": [],
+  "allowScripts": {
+    "sqlite3@6.0.1": true
+  }
 }
