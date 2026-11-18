@@ -6,6 +6,9 @@ fazer) e mostra, em seguida, **como a API atual se posiciona em relação a elas
 implementado, o que está parcial e o que ainda falta.
 
 > O pacote está registrado como `escambo-literario-api` no `package.json`.
+>
+> 📌 **Planejamento:** o andamento (feito × pendente) e a estratégia **Code First** estão em
+> [`ROADMAP.md`](./ROADMAP.md).
 
 ---
 

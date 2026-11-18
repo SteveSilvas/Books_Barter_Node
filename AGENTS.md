@@ -68,8 +68,18 @@ tests/            Jest + Supertest (setup-env.ts, helpers/app.ts, *.test.ts)
 
 ## Banco
 
+**Abordagem Code First:** a fonte da verdade do schema são os models Sequelize tipados em
+`src/models/`; o banco é derivado do código (nunca o contrário). Evoluções de schema começam sempre
+por uma alteração no model + associação.
+
 Nomes de tabela preservados: `Users`, `Categories`, `Books`, `BookCopies`, `Addresses`.
-`sequelize.sync()` na inicialização cria/atualiza todas as tabelas.
+`sequelize.sync()` na inicialização cria/atualiza todas as tabelas (dev/teste). Para produção,
+migrações versionadas **geradas a partir dos models** — ver `ROADMAP.md`.
+
+## Roadmap
+
+Plano de evolução (feito × pendente) e estratégia Code First em `ROADMAP.md`. Consultar antes de
+iniciar novas funcionalidades.
 
 ## Git
 
