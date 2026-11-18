@@ -50,7 +50,7 @@ já foi entregue e do que ainda precisa ser desenvolvido.
 | 1 | Acesso autenticado | ✅ Implementado | Cadastro (`POST /users`), login por e-mail/senha (`POST /users/login`) e login com Google (`POST /users/google`). Senhas com **hash (bcrypt)**, sessão por **JWT** (`Authorization: Bearer <token>`) e rotas de escrita protegidas pelo middleware `authenticate`. |
 | 2 | Ver e editar perfil | ✅ Implementado | `GET /users/me` (perfil próprio) e `PUT /users/me` (edição parcial com validação de nome/e-mail/data). Troca de senha exige a senha atual. `PUT/DELETE /users/:uuid` só permitem o **próprio** usuário (403 caso contrário). Perfis de terceiros são públicos **sem e-mail**. |
 | 3 | Estante digital | ✅ Implementado | Cada livro tem dono (`Book.UserId`) e status. **Estante pessoal privada** em `GET /users/me/books` (só o dono) e **catálogo público** em `GET /books?title=` (ver e pesquisar). CRUD do livro restrito ao dono (403 caso contrário). |
-| 4 | Visibilidade da estante de outros | 🟡 Parcial | Catálogo público com busca por título e `Owner.Name` no livro. **Falta** paginação, ordenação e filtros por status/categoria. |
+| 4 | Visibilidade da estante de outros | ✅ Implementado | Catálogo público **paginado** (`?limit&offset`), **ordenável** (`?sort&order`) e **filtrável** (`?title&categoryUuid&status&ownerUuid`), listando só livros `available`. Estante pública de terceiros em `GET /users/:uuid/books`. Respostas em envelope `{ data, meta }`, sem expor `UserId`. |
 | 5 | Seguir / deixar de seguir | 🔴 Pendente | Não implementado (sem entidade de relacionamento entre usuários). |
 | 6 | Favoritar / desfavoritar | 🔴 Pendente | Não implementado (sem entidade de favoritos). |
 | 7 | Chat de negociação | 🔴 Pendente | Não implementado (sem entidades de conversa/mensagem). |
@@ -225,9 +225,10 @@ Rotas marcadas com 🔒 exigem autenticação (`Authorization: Bearer <token>`).
 
 | Método | Rota | Descrição | Corpo |
 |--------|------|-----------|-------|
-| GET | `/books` | Catálogo público; busca por título com `?title=` | — |
+| GET | `/books` | Catálogo público paginado; filtros `?title&categoryUuid&status&ownerUuid`, `?limit&offset`, `?sort&order` (só `available`) | — |
 | GET | `/books/:uuid` | Detalhe público de um livro | — |
-| GET 🔒 | `/users/me/books` | Estante **pessoal** do usuário autenticado (só o dono) | — |
+| GET 🔒 | `/users/me/books` | Estante **pessoal** do usuário autenticado (todos os status) | — |
+| GET | `/users/:uuid/books` | Estante **pública** de outro usuário (só `available`; mesma paginação) | — |
 | POST 🔒 | `/books` | Cadastra um livro (dono = usuário do token) | `{ Title, Autor, CategoryUuid, Status?, CreationDate?, CreationLocality? }` |
 | PUT 🔒 | `/books/:uuid` | Atualiza um livro (**só o dono**; 403 se for de outro) | `{ Title?, Autor?, CategoryUuid?, Status?, CreationDate?, CreationLocality? }` |
 | DELETE 🔒 | `/books/:uuid` | Remove um livro (**só o dono**; 403 se for de outro) | — |
@@ -317,9 +318,10 @@ Cada livro pertence a um **dono** (`Book.UserId`, definido pelo token na criaç�
 (`available`, `reserved` ou `traded`). A resposta pública de um livro **não expõe `UserId` nem o
 `Id` interno**: o dono aparece apenas como `Owner: { Name }` e as rotas usam `Uuid`.
 
-* **Estante pessoal (privada):** `GET /users/me/books` (🔒) lista os livros do usuário autenticado.
-* **Catálogo público:** `GET /books` e `GET /books/:uuid` (sem token), com busca parcial por título
-  via `GET /books?title=<termo>`.
+* **Estante pessoal (privada):** `GET /users/me/books` (🔒) lista os livros do usuário autenticado
+  (todos os status).
+* **Catálogo público:** `GET /books` e `GET /books/:uuid` (sem token). O catálogo mostra apenas
+  livros **disponíveis** (`available`) e devolve um envelope paginado (ver Regra 4 abaixo).
 * **CRUD restrito ao dono:** `POST /books` (dono = token), `PUT /books/:uuid` e `DELETE /books/:uuid`
   — qualquer outro usuário autenticado recebe `403`.
 * **Corpo do livro:** `{ Title, Autor, CategoryUuid, Status?, CreationDate?, CreationLocality? }`.
@@ -341,6 +343,46 @@ curl -X POST http://localhost:3000/books \
 curl -X PUT http://localhost:3000/books/<uuid-do-livro> \
   -H "Authorization: Bearer <jwt>" -H 'Content-Type: application/json' \
   -d '{"Status":"reserved"}'
+```
+
+### Catálogo: paginação, ordenação e filtros (Regra 4)
+
+As listagens (`GET /books`, `GET /users/me/books` e `GET /users/:uuid/books`) devolvem um **envelope
+paginado**:
+
+```json
+{
+  "data": [ { "Uuid": "...", "Title": "Dom Casmurro", "Owner": { "Name": "Ana" }, "Status": { "Name": "available", "Description": "Disponível" } } ],
+  "meta": { "limit": 20, "offset": 0, "total": 1, "count": 1, "hasMore": false }
+}
+```
+
+Parâmetros de query (todos opcionais):
+
+| Parâmetro | Valores | Default |
+|-----------|---------|---------|
+| `limit` | inteiro de `1` a `50` | `20` |
+| `offset` | inteiro `>= 0` | `0` |
+| `sort` | `createdAt`, `updatedAt`, `Title`, `Autor` | `createdAt` |
+| `order` | `asc`, `desc` | `desc` |
+| `title` | trecho do título (parcial, case-insensitive) | — |
+| `categoryUuid` | UUID da categoria | — |
+| `status` | `available`, `reserved`, `traded` | `available` (no catálogo e na estante de terceiros) |
+| `ownerUuid` | UUID do dono | — |
+
+Valores fora das opções acima retornam **400**. O **catálogo** (`GET /books`) e a **estante de
+terceiros** (`GET /users/:uuid/books`) listam por padrão apenas livros `available`; a **própria
+estante** (`GET /users/me/books`) mostra todos os status.
+
+```bash
+# catálogo: 2ª página, ordenado por título
+curl "http://localhost:3000/books?limit=10&offset=10&sort=Title&order=asc"
+
+# filtrar por categoria e por dono
+curl "http://localhost:3000/books?categoryUuid=<uuid>&ownerUuid=<uuid>"
+
+# estante pública de outro usuário
+curl "http://localhost:3000/users/<uuid>/books?limit=5"
 ```
 
 ### Formato de erro
@@ -465,7 +507,7 @@ executá-los.
 npm test
 ```
 
-Cobertura atual (54 casos): criação/listagem/busca/atualização/remoção de usuários, login válido e
+Cobertura atual (63 casos): criação/listagem/busca/atualização/remoção de usuários, login válido e
 inválido, senha com hash (não em texto puro), **token JWT** e rotas protegidas (401 sem token/token
 inválido), **perfil próprio vs. público** (e-mail oculto de terceiros), edição de perfil com
 validação (nome/e-mail/data), **troca de senha** (senha atual obrigatória), **posse do recurso**
@@ -473,8 +515,10 @@ validação (nome/e-mail/data), **troca de senha** (senha atual obrigatória), *
 `idToken` inválido), **estante pessoal privada** (`/users/me/books`, 401 sem token), **catálogo
 público com busca por título** e sem vazamento de `UserId`, **status do livro** (default `available`,
 troca para `reserved`/`traded`, 400 para inexistente), `Uuid` inválido (400) e inexistente (404),
-e-mail duplicado, recurso e rota inexistentes, e o ciclo CRUD completo de `books`, `categories`,
-`book-copies` e `addresses` — verificando os status HTTP esperados
+e-mail duplicado, recurso e rota inexistentes, **catálogo paginado** (`limit`/`offset` + metadados),
+**ordenação** (allowlist, 400 fora dela), **filtros** (categoria/status/dono), **estante pública de
+terceiros** (por UUID, 400/404), e o ciclo CRUD completo de `books`, `categories`, `book-copies` e
+`addresses` — verificando os status HTTP esperados
 (`200`, `201`, `204`, `400`, `401`, `403`, `404`, `409`).
 
 Estrutura:
@@ -509,7 +553,8 @@ A plataforma incentiva boas práticas para a segurança da comunidade:
 * O **catálogo** de livros é público por design; a **estante pessoal** (`/users/me/books`) é privada,
   mas ainda não há níveis de privacidade configuráveis pelo usuário.
 * Não há **papel de administrador**: a posse (dono do perfil/livro) é a única regra de autorização.
-* A listagem do catálogo não tem **paginação** nem ordenação configurável (previsto para a Regra 4).
+* O catálogo não tem **busca textual além do título** (ex.: autor, descrição) nem ordenação por
+  relevância; a ordenação é restrita aos campos da allowlist.
 * Não há **refresh token** nem revogação de JWT: o token expira conforme `JWT_EXPIRES_IN`.
 * O login com Google valida o ID token no backend; não há fluxo OAuth interativo (redirect) — o
   cliente obtém o ID token (Google Identity Services) e o envia à API.

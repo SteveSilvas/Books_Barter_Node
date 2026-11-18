@@ -137,7 +137,8 @@ describe('Book (catálogo público)', () => {
 
         const list = await request(app).get('/books');
         expect(list.status).toBe(200);
-        expect(list.body[0].Category).toMatchObject({ Description: 'Romance' });
+        expect(list.body.data[0].Category).toMatchObject({ Description: 'Romance' });
+        expect(list.body.meta).toMatchObject({ total: 1, count: 1, hasMore: false });
 
         const updated = await request(app)
             .put(`/books/${uuid}`)
@@ -155,8 +156,8 @@ describe('Book (catálogo público)', () => {
 
         const res = await request(app).get('/books').query({ title: 'casmurro' });
         expect(res.status).toBe(200);
-        expect(res.body).toHaveLength(1);
-        expect(res.body[0].Title).toBe('Dom Casmurro');
+        expect(res.body.data).toHaveLength(1);
+        expect(res.body.data[0].Title).toBe('Dom Casmurro');
     });
 
     it('responde 403 ao editar ou remover livro de outro usuário', async () => {
@@ -220,13 +221,158 @@ describe('Estante pessoal (GET /users/me/books)', () => {
 
         const mine = await request(app).get('/users/me/books').set(bearer(token));
         expect(mine.status).toBe(200);
-        expect(mine.body).toHaveLength(1);
-        expect(mine.body[0].Title).toBe('Meu livro');
+        expect(mine.body.data).toHaveLength(1);
+        expect(mine.body.data[0].Title).toBe('Meu livro');
     });
 
     it('responde 401 sem token (estante é privada)', async () => {
         const res = await request(app).get('/users/me/books');
         expect(res.status).toBe(401);
+    });
+});
+
+describe('Regra 4 — catálogo público (paginação, ordenação e filtros)', () => {
+    it('lista apenas livros disponíveis no catálogo', async () => {
+        const categoryUuid = await createCategory();
+        await createBook(categoryUuid, { Title: 'Disponível' });
+        await createBook(categoryUuid, { Title: 'Reservado', Status: 'reserved' });
+
+        const res = await request(app).get('/books');
+        expect(res.status).toBe(200);
+        expect(res.body.data).toHaveLength(1);
+        expect(res.body.data[0].Title).toBe('Disponível');
+        expect(res.body.meta).toMatchObject({ total: 1, count: 1, hasMore: false });
+    });
+
+    it('pagina com limit e offset e devolve metadados', async () => {
+        const categoryUuid = await createCategory();
+        await createBook(categoryUuid, { Title: 'A' });
+        await createBook(categoryUuid, { Title: 'B' });
+        await createBook(categoryUuid, { Title: 'C' });
+
+        const first = await request(app).get('/books').query({ limit: 2, offset: 0 });
+        expect(first.status).toBe(200);
+        expect(first.body.data).toHaveLength(2);
+        expect(first.body.meta).toMatchObject({
+            limit: 2,
+            offset: 0,
+            total: 3,
+            count: 2,
+            hasMore: true,
+        });
+
+        const second = await request(app).get('/books').query({ limit: 2, offset: 2 });
+        expect(second.body.data).toHaveLength(1);
+        expect(second.body.meta).toMatchObject({ offset: 2, count: 1, hasMore: false });
+    });
+
+    it('rejeita limit/offset inválidos (400)', async () => {
+        expect((await request(app).get('/books').query({ limit: 0 })).status).toBe(400);
+        expect((await request(app).get('/books').query({ limit: 999 })).status).toBe(400);
+        expect((await request(app).get('/books').query({ offset: -1 })).status).toBe(400);
+    });
+
+    it('ordena por título (asc/desc) e rejeita sort inválido (400)', async () => {
+        const categoryUuid = await createCategory();
+        await createBook(categoryUuid, { Title: 'Beta' });
+        await createBook(categoryUuid, { Title: 'Alfa' });
+
+        const asc = await request(app).get('/books').query({ sort: 'Title', order: 'asc' });
+        expect(asc.body.data.map((b: { Title: string }) => b.Title)).toEqual(['Alfa', 'Beta']);
+
+        const desc = await request(app).get('/books').query({ sort: 'Title', order: 'desc' });
+        expect(desc.body.data.map((b: { Title: string }) => b.Title)).toEqual(['Beta', 'Alfa']);
+
+        expect((await request(app).get('/books').query({ sort: 'senha' })).status).toBe(400);
+        expect((await request(app).get('/books').query({ order: 'cima' })).status).toBe(400);
+    });
+
+    it('filtra por categoria, status e dono', async () => {
+        const romance = await createCategory('Romance');
+        const ficcao = await createCategory('Ficção');
+        await createBook(romance, { Title: 'R1' });
+        await createBook(ficcao, { Title: 'F1' });
+        await createBook(romance, { Title: 'R2 reservado', Status: 'reserved' });
+
+        const byCategory = await request(app).get('/books').query({ categoryUuid: romance });
+        expect(byCategory.body.data.map((b: { Title: string }) => b.Title)).toEqual(['R1']);
+
+        const byStatus = await request(app)
+            .get('/books')
+            .query({ status: 'reserved' });
+        expect(byStatus.body.data.map((b: { Title: string }) => b.Title)).toEqual([
+            'R2 reservado',
+        ]);
+
+        expect((await request(app).get('/books').query({ status: 'x' })).status).toBe(400);
+
+        const other = await registerAndLogin(app);
+        await request(app)
+            .post('/books')
+            .set(bearer(other.token))
+            .send({ Title: 'Do outro', Autor: 'Z', CategoryUuid: romance });
+
+        const byOwner = await request(app).get('/books').query({ ownerUuid: other.Uuid });
+        expect(byOwner.body.data.map((b: { Title: string }) => b.Title)).toEqual(['Do outro']);
+    });
+
+    it('estante pessoal mostra todos os status', async () => {
+        const categoryUuid = await createCategory();
+        await createBook(categoryUuid, { Title: 'Disponível' });
+        await createBook(categoryUuid, { Title: 'Trocado', Status: 'traded' });
+
+        const mine = await request(app).get('/users/me/books').set(bearer(token));
+        expect(mine.body.data).toHaveLength(2);
+        expect(mine.body.meta).toMatchObject({ total: 2, count: 2, hasMore: false });
+    });
+});
+
+describe('Regra 4 — estante pública de outro usuário', () => {
+    it('expõe a estante pública de um usuário por uuid', async () => {
+        const ana = await registerAndLogin(app, { Email: 'ana@example.com' });
+        const categoryUuid = await createCategory();
+
+        await request(app)
+            .post('/books')
+            .set(bearer(ana.token))
+            .send({ Title: 'Da Ana', Autor: 'A', CategoryUuid: categoryUuid });
+        await request(app)
+            .post('/books')
+            .set(bearer(ana.token))
+            .send({ Title: 'Reservado da Ana', Autor: 'A', CategoryUuid: categoryUuid, Status: 'reserved' });
+        await createBook(categoryUuid, { Title: 'Do principal' });
+
+        const res = await request(app).get(`/users/${ana.Uuid}/books`);
+        expect(res.status).toBe(200);
+        expect(res.body.data.map((b: { Title: string }) => b.Title)).toEqual(['Da Ana']);
+        expect(res.body.data[0].Owner).toEqual({ Name: 'Usuário Teste' });
+        expect(res.body.data[0].UserId).toBeUndefined();
+    });
+
+    it('responde 400 para uuid inválido e 404 para usuário inexistente', async () => {
+        expect((await request(app).get('/users/nao-e-uuid/books')).status).toBe(400);
+        expect(
+            (await request(app).get('/users/00000000-0000-4000-8000-000000000000/books'))
+                .status,
+        ).toBe(404);
+    });
+
+    it('pagina e ordena a estante pública', async () => {
+        const ana = await registerAndLogin(app, { Email: 'ana@example.com' });
+        const categoryUuid = await createCategory();
+        for (const title of ['C', 'A', 'B']) {
+            await request(app)
+                .post('/books')
+                .set(bearer(ana.token))
+                .send({ Title: title, Autor: 'A', CategoryUuid: categoryUuid });
+        }
+
+        const res = await request(app)
+            .get(`/users/${ana.Uuid}/books`)
+            .query({ sort: 'Title', order: 'asc', limit: 2, offset: 1 });
+        expect(res.status).toBe(200);
+        expect(res.body.data.map((b: { Title: string }) => b.Title)).toEqual(['B', 'C']);
+        expect(res.body.meta).toMatchObject({ total: 3, limit: 2, offset: 1, hasMore: false });
     });
 });
 

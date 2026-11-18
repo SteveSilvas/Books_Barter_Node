@@ -37,7 +37,7 @@ src/
   database/       instância do Sequelize (mysql ou sqlite)
   errors/         AppError (message + statusCode)
   middlewares/    asyncHandler, errorHandler, notFoundHandler, authenticate (JWT), authorizeSelf (posse de perfil)
-  utils/          parseId/parseParam/parseUuid, validation (nome/e-mail/data/senha), password (bcrypt), jwt (sign/verify), googleAuth (ID token)
+  utils/          parseId/parseParam/parseUuid, query (paginação/ordenação/filtros), validation (nome/e-mail/data/senha), password (bcrypt), jwt (sign/verify), googleAuth (ID token)
   @types/         DTOs por recurso (user, auth, book, category, bookCopy, address) + express.d.ts (req.user)
   models/         classes Sequelize tipadas (InferAttributes/InferCreationAttributes)
   services/       regras de negócio; lançam AppError; exportam singleton (ex.: userService)
@@ -68,10 +68,23 @@ tests/            Jest + Supertest (setup-env.ts, helpers/app.ts, helpers/auth.t
 - `Book` tem `UserId` (não nulo, dono) e `StatusId` → `BookStatus` (`available`/`reserved`/`traded`,
   semeado em `seedBookStatuses()` chamado por `syncDatabase()`).
 - `BookService.toPublic` **não expõe `UserId` nem `Id`**: devolve `Owner: { Name }`, `Category.Uuid` e `Status`.
-- Estante pessoal **privada**: `GET /users/me/books` (dono = `req.user.Id`).
-- Catálogo **público**: `GET /books?title=` (LIKE parcial) e `GET /books/:uuid`.
+- Estante pessoal **privada**: `GET /users/me/books` (dono = `req.user.Id`, todos os status).
+- Catálogo **público**: `GET /books` e `GET /books/:uuid`; estante pública de terceiros em
+  `GET /users/:uuid/books` (via `BookService.resolveOwnerId`).
 - CRUD do livro restrito ao dono: `BookService` checa `book.UserId !== userId` → 403.
 - `POST/PUT /books` usam `CategoryUuid` e `Status` (nome); status inexistente → 400.
+
+## Listagens paginadas (Regra 4)
+
+- `src/utils/query.ts` centraliza `parsePagination` (`limit` 1..50, `offset` >= 0),
+  `parseSort` (allowlist `createdAt`/`updatedAt`/`Title`/`Autor` + `asc`/`desc`) e
+  `parseBookQuery` (`title`/`categoryUuid`/`status`/`ownerUuid`); valores inválidos → 400.
+- Respostas de listagem usam o envelope `Paged<T>` = `{ data, meta }` com
+  `meta = { limit, offset, total, count, hasMore }` (via `buildPageMeta`).
+- `BookService.list(filter, pagination, sort)` usa `findAndCountAll` com `distinct: true`
+  (por causa dos `include`).
+- Catálogo e estante de terceiros filtram `$Status.Name$ = 'available'` por padrão; a própria
+  estante passa `includeAllStatuses: true`.
 
 ## Testes
 

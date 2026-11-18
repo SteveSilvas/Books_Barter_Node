@@ -1,22 +1,31 @@
-import { Op } from 'sequelize';
+import { Includeable, Op, WhereOptions } from 'sequelize';
 import { StatusCodes } from 'http-status-codes';
-import {
-    BookType,
-    CreateBookDTO,
-    UpdateBookDTO,
-} from '../@types/book';
+import { BookType, CreateBookDTO, UpdateBookDTO } from '../@types/book';
 import { AppError } from '../errors/AppError';
 import { Book, BookStatus, Category, User } from '../models';
 import { BookStatusName } from '../models/BookStatus';
+import {
+    BookQuery,
+    Paged,
+    Pagination,
+    SortSpec,
+    buildPageMeta,
+} from '../utils/query';
 
-export interface ListBooksFilter {
-    /** Trecho do título (busca parcial, case-insensitive). */
-    title?: string;
+/** Filtros aceitos pelo catálogo e pelas estantes. */
+export interface ListBooksFilter extends BookQuery {
+    /** Restringe a estante a um dono específico (por id interno). */
+    ownerId?: number;
+    /** Mostra todos os status (só a própria estante); padrão: apenas `available`. */
+    includeAllStatuses?: boolean;
 }
 
 export interface IBookService {
-    list(filter?: ListBooksFilter): Promise<BookType[]>;
-    listByOwner(userId: number): Promise<BookType[]>;
+    list(
+        filter?: ListBooksFilter,
+        pagination?: Pagination,
+        sort?: SortSpec,
+    ): Promise<Paged<BookType>>;
     getByUuid(uuid: string): Promise<BookType>;
     create(userId: number, data: CreateBookDTO): Promise<BookType>;
     update(userId: number, uuid: string, data: UpdateBookDTO): Promise<BookType>;
@@ -28,6 +37,9 @@ const INCLUDE = [
     { model: User, as: 'Owner', attributes: ['Name'] },
     { model: BookStatus, as: 'Status', attributes: ['Name', 'Description'] },
 ];
+
+const DEFAULT_PAGINATION: Pagination = { limit: 20, offset: 0 };
+const DEFAULT_SORT: SortSpec = { field: 'createdAt', order: 'desc' };
 
 /** Projeção pública: sem `Id` interno e sem `UserId` (dono só pelo nome). */
 function toPublic(book: Book): BookType {
@@ -51,27 +63,66 @@ function toPublic(book: Book): BookType {
 }
 
 export class BookService implements IBookService {
-    /** Catálogo público de livros, com busca opcional por título. */
-    public async list(filter: ListBooksFilter = {}): Promise<BookType[]> {
-        const where = filter.title
-            ? { Title: { [Op.like]: `%${filter.title}%` } }
-            : undefined;
-        const books = await Book.findAll({
-            where,
-            order: [['Id', 'DESC']],
-            include: INCLUDE,
-        });
-        return books.map(toPublic);
-    }
+    /**
+     * Lista paginada de livros. Usada pelo catálogo público e pelas estantes.
+     * O catálogo público (`ownerId` ausente) mostra apenas livros disponíveis;
+     * a estante do próprio dono mostra todos os status.
+     */
+    public async list(
+        filter: ListBooksFilter = {},
+        pagination: Pagination = DEFAULT_PAGINATION,
+        sort: SortSpec = DEFAULT_SORT,
+    ): Promise<Paged<BookType>> {
+        const where: WhereOptions = {};
 
-    /** Estante pessoal: somente os livros do próprio dono. */
-    public async listByOwner(userId: number): Promise<BookType[]> {
-        const books = await Book.findAll({
-            where: { UserId: userId },
-            order: [['Id', 'DESC']],
-            include: INCLUDE,
+        if (filter.title) {
+            where.Title = { [Op.like]: `%${filter.title}%` };
+        }
+        if (filter.status) {
+            where['$Status.Name$'] = filter.status;
+        } else if (!filter.includeAllStatuses) {
+            // Catálogo e estantes de terceiros: apenas o que está disponível.
+            where['$Status.Name$'] = 'available';
+        }
+        if (filter.ownerId !== undefined) {
+            where.UserId = filter.ownerId;
+        }
+
+        const include: Includeable[] = [
+            { model: Category, as: 'Category', attributes: ['Uuid', 'Description'] },
+            { model: User, as: 'Owner', attributes: ['Name'] },
+            { model: BookStatus, as: 'Status', attributes: ['Name', 'Description'] },
+        ];
+        if (filter.categoryUuid) {
+            include[0] = {
+                model: Category,
+                as: 'Category',
+                attributes: ['Uuid', 'Description'],
+                where: { Uuid: filter.categoryUuid },
+            };
+        }
+        if (filter.ownerUuid) {
+            include[1] = {
+                model: User,
+                as: 'Owner',
+                attributes: ['Name'],
+                where: { Uuid: filter.ownerUuid },
+            };
+        }
+
+        const { rows, count } = await Book.findAndCountAll({
+            where,
+            include,
+            order: [[sort.field, sort.order.toUpperCase()]],
+            limit: pagination.limit,
+            offset: pagination.offset,
+            distinct: true,
         });
-        return books.map(toPublic);
+
+        return {
+            data: rows.map(toPublic),
+            meta: buildPageMeta(count, pagination, rows.length),
+        };
     }
 
     public async getByUuid(uuid: string): Promise<BookType> {
@@ -127,6 +178,18 @@ export class BookService implements IBookService {
         const book = await this.findByUuid(uuid);
         this.assertOwnership(book, userId);
         await book.destroy();
+    }
+
+    /** Id interno do usuário a partir do UUID (para a estante de terceiros). */
+    public async resolveOwnerId(ownerUuid: string): Promise<number> {
+        const owner = await User.findOne({
+            where: { Uuid: ownerUuid },
+            attributes: ['Id'],
+        });
+        if (!owner) {
+            throw new AppError('Usuário não encontrado.', StatusCodes.NOT_FOUND);
+        }
+        return owner.Id;
     }
 
     private async findByUuid(uuid: string): Promise<Book> {

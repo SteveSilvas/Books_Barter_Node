@@ -60,7 +60,7 @@ Fundação técnica e recursos de apoio já entregues:
 | CRUD de exemplares (`/book-copies`) | ✅ | `BookCopyService` |
 | CRUD de endereços (`/addresses`) | ✅ | `AddressService` |
 | Middlewares de erro/404 e `AppError` com status HTTP | ✅ | `src/middlewares`, `src/errors` |
-| Suíte de testes de integração (Jest + Supertest, SQLite em memória, 54 casos) | ✅ | `tests/` |
+| Suíte de testes de integração (Jest + Supertest, SQLite em memória, 63 casos) | ✅ | `tests/` |
 | Dialeto duplo MySQL/SQLite por configuração (`DB_DIALECT`) | ✅ | `src/config/env.ts`, `src/database/index.ts` |
 | Documentação (README + AGENTS.md) alinhada ao código | ✅ | `README.md`, `AGENTS.md` |
 
@@ -104,12 +104,15 @@ ver e pesquisar livros por título, sem expor o `UserId` do dono.
 
 ---
 
-### Fase 2 — Visibilidade da estante de outros (regra 4) 🟡
+### Fase 2 — Visibilidade da estante de outros (regra 4) ✅
 
 - [x] Catálogo público (`GET /books`) com `Owner.Name` e busca por título.
 - [x] Status do livro (`available`/`reserved`/`traded`) exposto na resposta.
-- [ ] Paginação e ordenação na listagem do catálogo.
-- [ ] Filtros por categoria e por status na busca.
+- [x] Paginação (`?limit`/`?offset`, máx. 50) com envelope `{ data, meta }`.
+- [x] Ordenação por allowlist (`?sort=createdAt|updatedAt|Title|Autor&order=asc|desc`).
+- [x] Filtros por `title`, `categoryUuid`, `status` e `ownerUuid`.
+- [x] Catálogo e estante de terceiros listam apenas livros `available`.
+- [x] Estante pública de terceiros: `GET /users/:uuid/books`.
 
 **Aceite:** os livros publicados são visíveis e pesquisáveis por outros usuários.
 
