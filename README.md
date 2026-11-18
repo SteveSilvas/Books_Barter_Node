@@ -1,11 +1,11 @@
-# 📚 bibliotech — API de Escambo de Livros
+# 📚 EscamboLiterário — API de Escambo de Livros
 
 API REST em **Node.js + TypeScript** que dá suporte a uma plataforma de troca (escambo) de livros
 entre leitores. Este documento descreve **as regras de negócio do produto** (o que o sistema deve
 fazer) e mostra, em seguida, **como a API atual se posiciona em relação a elas** — o que já está
 implementado, o que está parcial e o que ainda falta.
 
-> O pacote está registrado como `bibliotech` no `package.json`.
+> O pacote está registrado como `escambo-literario-api` no `package.json`.
 
 ---
 
@@ -137,7 +137,7 @@ npx tsc --noEmit
 │   │   ├── errorHandler.ts     # Traduz erros em respostas HTTP
 │   │   └── notFoundHandler.ts  # 404 para rotas desconhecidas
 │   ├── utils
-│   │   └── parseId.ts          # Valida/converte parâmetros de id
+│   │   └── parseId.ts          # Valida/converte parâmetros de rota (id e outros)
 │   ├── models                  # Models Sequelize tipados
 │   │   ├── index.ts            # Barrel + syncDatabase()
 │   │   ├── User.ts
@@ -303,14 +303,16 @@ criando/atualizando todas as tabelas automaticamente.
    DB_PASSWORD=senha
    DB_HOST=localhost
    DB_PORT=3306
-   DB_DIALECT=mysql
+   DB_DIALECT=mysql        # mysql (padrão) ou sqlite
 
    # Porta do servidor HTTP (padrão: 3000)
    PORT=3000
    ```
 
-   As variáveis `DB_NAME`, `DB_USER` e `DB_HOST` são obrigatórias — se faltarem, a aplicação
-   falha na inicialização com uma mensagem clara.
+   Com `DB_DIALECT=mysql`, as variáveis `DB_NAME`, `DB_USER` e `DB_HOST` são obrigatórias — se
+   faltarem, a aplicação falha na inicialização com uma mensagem clara. Com `DB_DIALECT=sqlite`,
+   nenhuma credencial é exigida e o banco é um arquivo local (`DB_STORAGE`, padrão `:memory:`),
+   configuração usada pela suíte de testes.
 
 4. **Inicie o servidor de desenvolvimento:**
    ```bash

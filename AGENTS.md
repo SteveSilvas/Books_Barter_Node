@@ -33,11 +33,11 @@ Fluxo: `rota → controller → service → model`; erros sobem até o `errorHan
 src/
   index.ts        bootstrap (authenticate + sync + listen)
   app.ts          cria/configura o Express
-  config/env.ts   leitura/validação de env (DB_NAME, DB_USER, DB_HOST obrigatórios; PORT padrão 3000)
-  database/       instância do Sequelize
+  config/env.ts   leitura/validação de env (DB_NAME, DB_USER, DB_HOST obrigatórios no mysql; PORT padrão 3000; sqlite dispensa credenciais)
+  database/       instância do Sequelize (mysql ou sqlite)
   errors/         AppError (message + statusCode)
   middlewares/    asyncHandler, errorHandler, notFoundHandler
-  utils/          parseId
+  utils/          parseId/parseParam (normaliza e valida parâmetros de rota do Express 5)
   @types/         DTOs por recurso (user, auth, book, category, bookCopy, address)
   models/         classes Sequelize tipadas (InferAttributes/InferCreationAttributes)
   services/       regras de negócio; lançam AppError; exportam singleton (ex.: userService)
