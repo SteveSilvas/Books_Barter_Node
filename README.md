@@ -48,7 +48,7 @@ já foi entregue e do que ainda precisa ser desenvolvido.
 | # | Regra de negócio | Status | O que existe no código hoje |
 |---|------------------|--------|------------------------------|
 | 1 | Acesso autenticado | ✅ Implementado | Cadastro (`POST /users`), login por e-mail/senha (`POST /users/login`) e login com Google (`POST /users/google`). Senhas com **hash (bcrypt)**, sessão por **JWT** (`Authorization: Bearer <token>`) e rotas de escrita protegidas pelo middleware `authenticate`. |
-| 2 | Ver e editar perfil | ✅ Implementado | Consulta por id/e-mail e `PUT /users/:id` (edição de perfil). O update persiste apenas os campos enviados (parcial) e impede e-mail duplicado. |
+| 2 | Ver e editar perfil | ✅ Implementado | `GET /users/me` (perfil próprio) e `PUT /users/me` (edição parcial com validação de nome/e-mail/data). Troca de senha exige a senha atual. `PUT/DELETE /users/:id` só permitem o **próprio** usuário (403 caso contrário). Perfis de terceiros são públicos **sem e-mail**. |
 | 3 | Estante digital pública | 🟡 Parcial | Cadastro e listagem de livros (`/books`). **Falta** o vínculo `Book → User` (não há noção de "dono" da estante). |
 | 4 | Visibilidade da estante de outros | 🔴 Pendente | Existe listagem geral de livros, mas **sem filtro por usuário/estante**. |
 | 5 | Seguir / deixar de seguir | 🔴 Pendente | Não implementado (sem entidade de relacionamento entre usuários). |
@@ -94,6 +94,7 @@ O fluxo de uma requisição é: `rota → controller → service → model`, e q
 | `204 No Content` | Recurso removido (DELETE) |
 | `400 Bad Request` | Parâmetro inválido (ex.: `id` não numérico) |
 | `401 Unauthorized` | Credenciais inválidas no login ou token ausente/inválido |
+| `403 Forbidden` | Ação sobre recurso de outro usuário (ex.: editar perfil alheio) |
 | `404 Not Found` | Recurso ou rota inexistente |
 | `409 Conflict` | E-mail já cadastrado |
 | `500 Internal Server Error` | Erro inesperado |
@@ -139,10 +140,12 @@ npx tsc --noEmit
 │   ├── middlewares
 │   │   ├── asyncHandler.ts     # Encaminha rejeições para o errorHandler
 │   │   ├── authenticate.ts     # Valida o JWT e popula req.user
+│   │   ├── authorizeSelf.ts    # Garante que o usuário só age sobre o próprio recurso
 │   │   ├── errorHandler.ts     # Traduz erros em respostas HTTP
 │   │   └── notFoundHandler.ts  # 404 para rotas desconhecidas
 │   ├── utils
 │   │   ├── parseId.ts          # Valida/converte parâmetros de rota (id e outros)
+│   │   ├── validation.ts       # Valida nome, e-mail, data e senha
 │   │   ├── password.ts         # Hash e verificação de senha (bcrypt)
 │   │   ├── jwt.ts              # Assinatura e verificação de token (JWT)
 │   │   └── googleAuth.ts       # Valida o ID token do Google
@@ -210,12 +213,13 @@ Rotas marcadas com 🔒 exigem autenticação (`Authorization: Bearer <token>`).
 | POST | `/users` | Cadastra um usuário | `{ Name, Birth?, Email, Pass }` |
 | POST | `/users/login` | Autentica por e-mail/senha e devolve `token` | `{ Email, Pass }` |
 | POST | `/users/google` | Autentica com Google (`idToken`) e devolve `token` | `{ idToken }` |
-| GET 🔒 | `/users/me` | Perfil do usuário autenticado | — |
-| GET | `/users` | Lista todos os usuários | — |
-| GET | `/users/:id` | Busca usuário por id | — |
-| GET | `/users/email/:email` | Busca usuário por e-mail | — |
-| PUT 🔒 | `/users/:id` | Atualiza um usuário (aceita atualização parcial) | `{ Name?, Birth?, Email?, Pass? }` |
-| DELETE 🔒 | `/users/:id` | Remove um usuário | — |
+| GET 🔒 | `/users/me` | Perfil **completo** do usuário autenticado | — |
+| PUT 🔒 | `/users/me` | Edita o próprio perfil (parcial) | `{ Name?, Birth?, Email?, Pass?, CurrentPass? }` |
+| GET | `/users` | Lista perfis públicos (sem e-mail) | — |
+| GET | `/users/:id` | Perfil público por id (sem e-mail) | — |
+| GET | `/users/email/:email` | Perfil público por e-mail (sem e-mail) | — |
+| PUT 🔒 | `/users/:id` | Atualiza **o próprio** perfil (parcial; 403 se for de outro) | `{ Name?, Birth?, Email?, Pass?, CurrentPass? }` |
+| DELETE 🔒 | `/users/:id` | Remove **o próprio** usuário (403 se for outro) | — |
 
 ### Livros
 
@@ -277,6 +281,33 @@ curl -X POST http://localhost:3000/users/login \
 
 # 2) requisição autenticada
 curl http://localhost:3000/users/me -H "Authorization: Bearer <jwt>"
+```
+
+### Perfil (Regra 2)
+
+O perfil tem duas visões: **a própria** (completa) e a **pública** (de terceiros).
+
+* **`GET /users/me`** (🔒) devolve `{ Id, Name, Birth, Email, Provider, createdAt, updatedAt }`.
+* **`GET /users`, `/users/:id`, `/users/email/:email`** devolvem apenas `{ Id, Name, Provider }`
+  — **sem e-mail** de terceiros.
+* **`PUT /users/me`** (🔒) edita o próprio perfil (parcial). Campos são validados: `Name` não vazio,
+  `Email` com formato válido (normalizado em minúsculas), `Birth` como data válida (ou `null` para
+  limpar).
+* **Troca de senha:** enviar `Pass` exige `CurrentPass` (a senha atual). Contas `google` não têm
+  senha local e não podem trocá-la por aqui (`403`).
+* **Posse:** `PUT /users/:id` e `DELETE /users/:id` só funcionam para o **próprio** `:id`;
+  qualquer outro retorna `403`.
+
+```bash
+# editar o próprio perfil
+curl -X PUT http://localhost:3000/users/me \
+  -H "Authorization: Bearer <jwt>" -H 'Content-Type: application/json' \
+  -d '{"Name":"Ana Maria"}'
+
+# trocar a senha (exige a senha atual)
+curl -X PUT http://localhost:3000/users/me \
+  -H "Authorization: Bearer <jwt>" -H 'Content-Type: application/json' \
+  -d '{"Pass":"novaSenha","CurrentPass":"secret"}'
 ```
 
 ### Formato de erro
@@ -397,12 +428,14 @@ executá-los.
 npm test
 ```
 
-Cobertura atual (38 casos): criação/listagem/busca/atualização/remoção de usuários, login válido e
+Cobertura atual (48 casos): criação/listagem/busca/atualização/remoção de usuários, login válido e
 inválido, senha com hash (não em texto puro), **token JWT** e rotas protegidas (401 sem token/token
-inválido), login Google (400 sem `idToken`, 401 com `idToken` inválido), e-mail duplicado, id
-inválido, recurso e rota inexistentes, e o ciclo CRUD completo de `books`, `categories`,
-`book-copies` e `addresses` — verificando os status HTTP esperados
-(`200`, `201`, `204`, `400`, `401`, `404`, `409`).
+inválido), **perfil próprio vs. público** (e-mail oculto de terceiros), edição de perfil com
+validação (nome/e-mail/data), **troca de senha** (senha atual obrigatória), **posse do recurso**
+(403 ao editar/remover outro usuário), login Google (400 sem `idToken`, 401 com `idToken` inválido),
+e-mail duplicado, id inválido, recurso e rota inexistentes, e o ciclo CRUD completo de `books`,
+`categories`, `book-copies` e `addresses` — verificando os status HTTP esperados
+(`200`, `201`, `204`, `400`, `401`, `403`, `404`, `409`).
 
 Estrutura:
 
@@ -433,8 +466,9 @@ A plataforma incentiva boas práticas para a segurança da comunidade:
 
 ### Limitações conhecidas
 
-* As rotas de **leitura** de usuários/livros ainda são públicas; apenas as de **escrita** exigem
-  token (alinhado às regras 2–4, que serão refinadas nas próximas fases).
+* As rotas de **leitura** de perfis/livros ainda são públicas; a leitura de perfil de terceiros já
+  oculta o e-mail, mas não há níveis de privacidade configuráveis pelo usuário.
+* Não há **papel de administrador**: a posse (`authorizeSelf`) é a única regra de autorização.
 * Não há **refresh token** nem revogação de JWT: o token expira conforme `JWT_EXPIRES_IN`.
 * O login com Google valida o ID token no backend; não há fluxo OAuth interativo (redirect) — o
   cliente obtém o ID token (Google Identity Services) e o envia à API.

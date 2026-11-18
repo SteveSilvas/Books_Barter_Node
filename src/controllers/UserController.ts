@@ -6,6 +6,17 @@ import { userService } from '../services/UserService';
 import { parseId, parseParam } from '../utils/parseId';
 import { verifyGoogleIdToken } from '../utils/googleAuth';
 
+/** Monta o DTO de atualização a partir do corpo da requisição. */
+function buildUpdateDTO(req: Request): UpdateUserDTO {
+    return {
+        Name: req.body.Name,
+        Birth: req.body.Birth,
+        Email: req.body.Email,
+        Pass: req.body.Pass,
+        CurrentPass: req.body.CurrentPass,
+    };
+}
+
 export class UserController {
     public async list(req: Request, res: Response): Promise<Response> {
         const users = await userService.list();
@@ -13,7 +24,13 @@ export class UserController {
     }
 
     public async me(req: Request, res: Response): Promise<Response> {
-        const user = await userService.getById(req.user!.Id);
+        const user = await userService.getProfile(req.user!.Id);
+        return res.status(StatusCodes.OK).json(user);
+    }
+
+    public async updateMe(req: Request, res: Response): Promise<Response> {
+        const data = buildUpdateDTO(req);
+        const user = await userService.update(req.user!.Id, data);
         return res.status(StatusCodes.OK).json(user);
     }
 
@@ -57,12 +74,7 @@ export class UserController {
 
     public async update(req: Request, res: Response): Promise<Response> {
         const id = parseId(req.params.id);
-        const data: UpdateUserDTO = {
-            Name: req.body.Name,
-            Birth: req.body.Birth,
-            Email: req.body.Email,
-            Pass: req.body.Pass,
-        };
+        const data = buildUpdateDTO(req);
         const user = await userService.update(id, data);
         return res.status(StatusCodes.OK).json(user);
     }

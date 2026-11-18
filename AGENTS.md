@@ -36,8 +36,8 @@ src/
   config/env.ts   leitura/validação de env (DB_NAME, DB_USER, DB_HOST obrigatórios no mysql; PORT padrão 3000; sqlite dispensa credenciais)
   database/       instância do Sequelize (mysql ou sqlite)
   errors/         AppError (message + statusCode)
-  middlewares/    asyncHandler, errorHandler, notFoundHandler, authenticate (JWT)
-  utils/          parseId/parseParam, password (bcrypt), jwt (sign/verify), googleAuth (ID token)
+  middlewares/    asyncHandler, errorHandler, notFoundHandler, authenticate (JWT), authorizeSelf (posse)
+  utils/          parseId/parseParam, validation (nome/e-mail/data/senha), password (bcrypt), jwt (sign/verify), googleAuth (ID token)
   @types/         DTOs por recurso (user, auth, book, category, bookCopy, address) + express.d.ts (req.user)
   models/         classes Sequelize tipadas (InferAttributes/InferCreationAttributes)
   services/       regras de negócio; lançam AppError; exportam singleton (ex.: userService)
@@ -54,6 +54,13 @@ tests/            Jest + Supertest (setup-env.ts, helpers/app.ts, helpers/auth.t
 - Login Google: `POST /users/google` com `{ idToken }`, validado em `src/utils/googleAuth.ts` contra `GOOGLE_CLIENT_ID`.
 - Rotas de escrita (`POST/PUT/DELETE` de todos os recursos) são protegidas; leituras seguem públicas.
 - Modelo `User`: `Pass` e `Birth` anuláveis; `Provider` (`local`/`google`) registra a origem da conta.
+
+## Perfil (Regra 2)
+
+- Duas visões: `toSelf` (próprio, completo) e `toPublic` (`{ Id, Name, Provider }`, sem e-mail).
+- `GET/PUT /users/me` operam sobre o id do token; `PUT/DELETE /users/:id` passam por `authorizeSelf` (403).
+- `update` valida via `utils/validation` (nome não vazio, e-mail normalizado, data válida) e troca de
+  senha exige `CurrentPass`; contas `google` não trocam senha local (403).
 
 ## Testes
 

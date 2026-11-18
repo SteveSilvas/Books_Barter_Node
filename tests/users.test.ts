@@ -63,21 +63,24 @@ describe('POST /users', () => {
 });
 
 describe('GET /users', () => {
-    it('lista os usuários cadastrados', async () => {
+    it('lista os usuários sem expor dados sensíveis', async () => {
         await request(app).post('/users').send(validUser);
         const res = await request(app).get('/users');
         expect(res.status).toBe(200);
         expect(Array.isArray(res.body)).toBe(true);
         expect(res.body).toHaveLength(1);
+        expect(res.body[0]).toMatchObject({ Name: 'Ana', Provider: 'local' });
+        expect(res.body[0].Email).toBeUndefined();
     });
 });
 
 describe('GET /users/:id', () => {
-    it('retorna o usuário pelo id', async () => {
+    it('retorna o perfil público (sem e-mail) pelo id', async () => {
         const created = await request(app).post('/users').send(validUser);
         const res = await request(app).get(`/users/${created.body.Id}`);
         expect(res.status).toBe(200);
-        expect(res.body.Email).toBe('ana@example.com');
+        expect(res.body).toMatchObject({ Name: 'Ana', Provider: 'local' });
+        expect(res.body.Email).toBeUndefined();
     });
 
     it('responde 404 para id inexistente', async () => {
@@ -92,11 +95,12 @@ describe('GET /users/:id', () => {
 });
 
 describe('GET /users/email/:email', () => {
-    it('retorna o usuário pelo e-mail', async () => {
+    it('retorna o perfil público (sem e-mail) pelo e-mail', async () => {
         await request(app).post('/users').send(validUser);
         const res = await request(app).get('/users/email/ana@example.com');
         expect(res.status).toBe(200);
         expect(res.body.Name).toBe('Ana');
+        expect(res.body.Email).toBeUndefined();
     });
 });
 
@@ -128,12 +132,12 @@ describe('POST /users/login', () => {
     });
 });
 
-describe('GET /users/me', () => {
-    it('retorna o perfil do usuário autenticado (200)', async () => {
+describe('GET /users/me (perfil próprio)', () => {
+    it('retorna o perfil completo do usuário autenticado (200)', async () => {
         const { token, Email } = await registerAndLogin(app, validUser);
         const res = await request(app).get('/users/me').set(bearer(token));
         expect(res.status).toBe(200);
-        expect(res.body.Email).toBe(Email);
+        expect(res.body).toMatchObject({ Email, Provider: 'local' });
         expect(res.body.Pass).toBeUndefined();
     });
 
@@ -145,6 +149,100 @@ describe('GET /users/me', () => {
     it('responde 401 com token inválido', async () => {
         const res = await request(app).get('/users/me').set(bearer('token.invalido'));
         expect(res.status).toBe(401);
+    });
+});
+
+describe('PUT /users/me (editar próprio perfil)', () => {
+    it('atualiza parcialmente o próprio perfil (200)', async () => {
+        const { token } = await registerAndLogin(app, validUser);
+        const res = await request(app)
+            .put('/users/me')
+            .set(bearer(token))
+            .send({ Name: 'Ana Maria' });
+        expect(res.status).toBe(200);
+        expect(res.body.Name).toBe('Ana Maria');
+        expect(res.body.Email).toBe('ana@example.com');
+    });
+
+    it('permite limpar a data de nascimento com null', async () => {
+        const { token } = await registerAndLogin(app, validUser);
+        const res = await request(app)
+            .put('/users/me')
+            .set(bearer(token))
+            .send({ Birth: null });
+        expect(res.status).toBe(200);
+        expect(res.body.Birth).toBeNull();
+    });
+
+    it('responde 400 para e-mail inválido', async () => {
+        const { token } = await registerAndLogin(app, validUser);
+        const res = await request(app)
+            .put('/users/me')
+            .set(bearer(token))
+            .send({ Email: 'nao-e-email' });
+        expect(res.status).toBe(400);
+    });
+
+    it('responde 400 para nome vazio', async () => {
+        const { token } = await registerAndLogin(app, validUser);
+        const res = await request(app)
+            .put('/users/me')
+            .set(bearer(token))
+            .send({ Name: '   ' });
+        expect(res.status).toBe(400);
+    });
+
+    it('responde 400 para data de nascimento inválida', async () => {
+        const { token } = await registerAndLogin(app, validUser);
+        const res = await request(app)
+            .put('/users/me')
+            .set(bearer(token))
+            .send({ Birth: 'data-invalida' });
+        expect(res.status).toBe(400);
+    });
+
+    it('responde 401 sem token', async () => {
+        const res = await request(app).put('/users/me').send({ Name: 'X' });
+        expect(res.status).toBe(401);
+    });
+});
+
+describe('PUT /users/me (troca de senha)', () => {
+    it('troca a senha com a senha atual correta e permite novo login', async () => {
+        const { token } = await registerAndLogin(app, validUser);
+        const res = await request(app)
+            .put('/users/me')
+            .set(bearer(token))
+            .send({ Pass: 'novaSenha', CurrentPass: 'secret' });
+        expect(res.status).toBe(200);
+
+        const ok = await request(app)
+            .post('/users/login')
+            .send({ Email: 'ana@example.com', Pass: 'novaSenha' });
+        expect(ok.status).toBe(200);
+
+        const old = await request(app)
+            .post('/users/login')
+            .send({ Email: 'ana@example.com', Pass: 'secret' });
+        expect(old.status).toBe(401);
+    });
+
+    it('responde 401 quando a senha atual está incorreta', async () => {
+        const { token } = await registerAndLogin(app, validUser);
+        const res = await request(app)
+            .put('/users/me')
+            .set(bearer(token))
+            .send({ Pass: 'novaSenha', CurrentPass: 'errada' });
+        expect(res.status).toBe(401);
+    });
+
+    it('responde 400 ao trocar a senha sem informar a senha atual', async () => {
+        const { token } = await registerAndLogin(app, validUser);
+        const res = await request(app)
+            .put('/users/me')
+            .set(bearer(token))
+            .send({ Pass: 'novaSenha' });
+        expect(res.status).toBe(400);
     });
 });
 
@@ -162,8 +260,8 @@ describe('POST /users/google', () => {
     });
 });
 
-describe('PUT /users/:id', () => {
-    it('atualiza parcialmente e responde 200', async () => {
+describe('PUT /users/:id (posse do recurso)', () => {
+    it('atualiza o próprio perfil pelo id (200)', async () => {
         const { token, Id } = await registerAndLogin(app, validUser);
         const res = await request(app)
             .put(`/users/${Id}`)
@@ -171,7 +269,16 @@ describe('PUT /users/:id', () => {
             .send({ Name: 'Ana Maria' });
         expect(res.status).toBe(200);
         expect(res.body.Name).toBe('Ana Maria');
-        expect(res.body.Email).toBe('ana@example.com');
+    });
+
+    it('responde 403 ao tentar editar outro usuário', async () => {
+        const { token } = await registerAndLogin(app, validUser);
+        const other = await registerAndLogin(app, { Email: 'bob@example.com' });
+        const res = await request(app)
+            .put(`/users/${other.Id}`)
+            .set(bearer(token))
+            .send({ Name: 'Invasor' });
+        expect(res.status).toBe(403);
     });
 
     it('responde 401 sem token', async () => {
@@ -193,23 +300,23 @@ describe('PUT /users/:id', () => {
             .send({ Email: 'bob@example.com' });
         expect(res.status).toBe(409);
     });
-
-    it('responde 404 para usuário inexistente', async () => {
-        const { token } = await registerAndLogin(app, validUser);
-        const res = await request(app)
-            .put('/users/9999')
-            .set(bearer(token))
-            .send({ Name: 'X' });
-        expect(res.status).toBe(404);
-    });
 });
 
-describe('DELETE /users/:id', () => {
-    it('remove o usuário e responde 204', async () => {
+describe('DELETE /users/:id (posse do recurso)', () => {
+    it('remove o próprio usuário e responde 204', async () => {
         const { token, Id } = await registerAndLogin(app, validUser);
         const res = await request(app).delete(`/users/${Id}`).set(bearer(token));
         expect(res.status).toBe(204);
         expect(res.body).toEqual({});
+    });
+
+    it('responde 403 ao tentar remover outro usuário', async () => {
+        const { token } = await registerAndLogin(app, validUser);
+        const other = await registerAndLogin(app, { Email: 'bob@example.com' });
+        const res = await request(app)
+            .delete(`/users/${other.Id}`)
+            .set(bearer(token));
+        expect(res.status).toBe(403);
     });
 
     it('responde 401 sem token', async () => {

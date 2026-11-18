@@ -50,13 +50,13 @@ Fundação técnica e recursos de apoio já entregues:
 | Login com Google (`POST /users/google`) via verificação de ID token | ✅ | `src/utils/googleAuth.ts` |
 | Middleware de autenticação (`authenticate`) protegendo rotas de escrita | ✅ | `src/middlewares/authenticate.ts` |
 | Senha nunca retornada nas respostas (DTO público sem `Pass`) | ✅ | `src/@types/user.ts`, `UserService` |
-| Ver e editar perfil (`GET /users/:id`, `GET /users/email/:email`, `PUT /users/:id` parcial) | ✅ | `UserController` |
+| Ver e editar perfil (`GET/PUT /users/me`, perfis públicos sem e-mail, posse em `/users/:id`) | ✅ | `UserController`, `authorizeSelf` |
 | CRUD de livros (`/books`) com categoria associada (`Book belongsTo Category`) | 🟡 | `src/services/BookService.ts` |
 | CRUD de categorias (`/categories`) | ✅ | `CategoryService` |
 | CRUD de exemplares (`/book-copies`) | ✅ | `BookCopyService` |
 | CRUD de endereços (`/addresses`) | ✅ | `AddressService` |
 | Middlewares de erro/404 e `AppError` com status HTTP | ✅ | `src/middlewares`, `src/errors` |
-| Suíte de testes de integração (Jest + Supertest, SQLite em memória, 38 casos) | ✅ | `tests/` |
+| Suíte de testes de integração (Jest + Supertest, SQLite em memória, 48 casos) | ✅ | `tests/` |
 | Dialeto duplo MySQL/SQLite por configuração (`DB_DIALECT`) | ✅ | `src/config/env.ts`, `src/database/index.ts` |
 | Documentação (README + AGENTS.md) alinhada ao código | ✅ | `README.md`, `AGENTS.md` |
 
