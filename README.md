@@ -95,7 +95,7 @@ npx tsc --noEmit
 * **Linguagem:** TypeScript 7 (`strict: true`), compilado com `tsc` e executado em dev com `tsx`
 * **Framework HTTP:** Express 5
 * **ORM:** Sequelize 6
-* **Banco de Dados:** MySQL (`mysql2`)
+* **Banco de Dados:** PostgreSQL (`pg`) ou MySQL (`mysql2`); SQLite nos testes
 * **Utilitários:** `cors`, `dotenv`, `http-status-codes`
 * **Autenticação:** `jsonwebtoken` (JWT), `bcryptjs` (hash de senha), `google-auth-library` (login Google)
 * **Testes:** Jest + Supertest com `@swc/jest` (SQLite em memória)
@@ -445,8 +445,8 @@ criando/atualizando todas as tabelas automaticamente.
 
 * [Node.js](https://nodejs.org) **26 ou superior** (LTS atual). O projeto fixa a versão em `.nvmrc`
   (`nvm use` / `fnm use` para adotá-la) e declara `engines.node >= 26`.
-* MySQL 8 (ou um container `mysql:8`). Para os testes automatizados **não é necessário** MySQL,
-  pois a suíte usa SQLite em memória.
+* PostgreSQL 16+ **ou** MySQL 8 (ou um container `postgres:16` / `mysql:8`). Para os testes
+  automatizados **não é necessário** um servidor de banco, pois a suíte usa SQLite em memória.
 * [Git](https://git-scm.com)
 
 ---
@@ -470,12 +470,13 @@ criando/atualizando todas as tabelas automaticamente.
 
    ```env
    # Banco de Dados (usado por src/config/env.ts e src/database/index.ts)
+   DB_DIALECT=postgres     # postgres | mysql (padrão) | sqlite
    DB_NAME=nome_do_banco
    DB_USER=usuario
    DB_PASSWORD=senha
    DB_HOST=localhost
-   DB_PORT=3306
-   DB_DIALECT=mysql        # mysql (padrão) ou sqlite
+   DB_PORT=5432            # 5432 (postgres) | 3306 (mysql)
+   DB_SSL=false            # true para Postgres remoto que exige TLS
 
    # Porta do servidor HTTP (padrão: 3000)
    PORT=3000
@@ -486,10 +487,11 @@ criando/atualizando todas as tabelas automaticamente.
    GOOGLE_CLIENT_ID=seu-client-id.apps.googleusercontent.com
    ```
 
-   Com `DB_DIALECT=mysql`, as variáveis `DB_NAME`, `DB_USER` e `DB_HOST` são obrigatórias — se
-   faltarem, a aplicação falha na inicialização com uma mensagem clara. Com `DB_DIALECT=sqlite`,
-   nenhuma credencial é exigida e o banco é um arquivo local (`DB_STORAGE`, padrão `:memory:`),
-   configuração usada pela suíte de testes.
+   Com `DB_DIALECT=postgres` ou `DB_DIALECT=mysql`, as variáveis `DB_NAME`, `DB_USER` e `DB_HOST`
+   são obrigatórias — se faltarem, a aplicação falha na inicialização com uma mensagem clara. A
+   porta padrão é `5432` no Postgres e `3306` no MySQL. Em Postgres remoto que exige TLS, defina
+   `DB_SSL=true`. Com `DB_DIALECT=sqlite`, nenhuma credencial é exigida e o banco é um arquivo local
+   (`DB_STORAGE`, padrão `:memory:`), configuração usada pela suíte de testes.
 
    `JWT_SECRET` e `JWT_EXPIRES_IN` controlam a assinatura/validade do token (há padrões apenas para
    desenvolvimento). `GOOGLE_CLIENT_ID` é o audience aceito em `POST /users/google`.
@@ -527,8 +529,8 @@ criando/atualizando todas as tabelas automaticamente.
 
 A suíte usa **Jest + Supertest** (transformando TypeScript com `@swc/jest`) e cobre as rotas via
 requisições HTTP reais contra a aplicação Express. Os testes rodam com **SQLite em memória**
-(dialeto configurado por `DB_DIALECT=sqlite`), então **não é necessário ter um MySQL rodando** para
-executá-los.
+(dialeto configurado por `DB_DIALECT=sqlite`), então **não é necessário ter um PostgreSQL ou MySQL
+rodando** para executá-los.
 
 ```bash
 npm test
@@ -579,13 +581,14 @@ dependências de produção).
 # build da imagem
 docker build -t books-barter-api .
 
-# execução (a API usa MySQL; aponte as variáveis para um MySQL acessível)
+# execução (aponte as variáveis para um banco acessível)
 docker run --rm -p 3000:3000 --env-file .env books-barter-api
 ```
 
-> ⚠️ Em **produção** o dialeto esperado é o **MySQL** (`DB_DIALECT=mysql`). O driver `sqlite3` é uma
-> dependência de **desenvolvimento** (usada nos testes) e **não** é instalado na imagem de runtime.
-> Para rodar a API com MySQL via Docker Compose, suba um serviço `mysql:8` e aponte `DB_HOST` para ele.
+> ⚠️ Em **produção** use PostgreSQL (`DB_DIALECT=postgres`) ou MySQL (`DB_DIALECT=mysql`). O driver
+> `sqlite3` é uma dependência de **desenvolvimento** (usada nos testes) e **não** é instalado na
+> imagem de runtime. Para rodar a API com Postgres via Docker Compose, suba um serviço `postgres:16`
+> e aponte `DB_HOST` para ele.
 
 Verifique a saúde após subir o container:
 

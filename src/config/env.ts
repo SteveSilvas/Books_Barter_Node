@@ -23,6 +23,7 @@ export interface DatabaseConfig {
     port: number;
     dialect: Dialect;
     storage?: string;
+    ssl: boolean;
 }
 
 export interface AuthConfig {
@@ -39,6 +40,7 @@ export interface AppConfig {
 
 const dialect = (process.env.DB_DIALECT ?? 'mysql') as Dialect;
 const isSqlite = dialect === 'sqlite';
+const defaultPort = dialect === 'postgres' ? 5432 : 3306;
 
 export const env: AppConfig = {
     server: {
@@ -50,9 +52,11 @@ export const env: AppConfig = {
         user: isSqlite ? '' : required('DB_USER'),
         password: process.env.DB_PASSWORD ?? '',
         host: isSqlite ? '' : required('DB_HOST'),
-        port: Number(process.env.DB_PORT ?? 3306),
+        port: Number(process.env.DB_PORT ?? defaultPort),
         dialect,
         storage: isSqlite ? (process.env.DB_STORAGE ?? ':memory:') : undefined,
+        // Habilita TLS na conexão (necessário em Postgres remoto que exige SSL).
+        ssl: process.env.DB_SSL === 'true',
     },
     auth: {
         jwtSecret: process.env.JWT_SECRET ?? 'troque-este-segredo-em-producao',

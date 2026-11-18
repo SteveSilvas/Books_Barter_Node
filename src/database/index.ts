@@ -1,7 +1,7 @@
 import { Sequelize } from 'sequelize';
 import { env } from '../config/env';
 
-const { dialect, storage } = env.database;
+const { dialect, storage, ssl } = env.database;
 
 export const sequelize =
     dialect === 'sqlite'
@@ -19,5 +19,6 @@ export const sequelize =
                   host: env.database.host,
                   port: env.database.port,
                   logging: false,
+                  ...(ssl ? { dialectOptions: { ssl: { require: true, rejectUnauthorized: false } } } : {}),
               },
           );
