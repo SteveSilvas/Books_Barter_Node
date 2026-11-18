@@ -376,6 +376,71 @@ describe('Regra 4 — estante pública de outro usuário', () => {
     });
 });
 
+describe('Regra 4 — bordas de paginação, ordenação e filtros', () => {
+    it('usa os defaults (limit 20, offset 0, createdAt desc) quando nada é informado', async () => {
+        const categoryUuid = await createCategory();
+        await createBook(categoryUuid, { Title: 'Primeiro' });
+        await createBook(categoryUuid, { Title: 'Segundo' });
+
+        const res = await request(app).get('/books');
+        expect(res.status).toBe(200);
+        expect(res.body.meta).toMatchObject({ limit: 20, offset: 0, total: 2 });
+        // Ordem default: mais recente primeiro.
+        expect(res.body.data.map((b: { Title: string }) => b.Title)).toEqual([
+            'Segundo',
+            'Primeiro',
+        ]);
+    });
+
+    it('aceita os limites exatos (limit 1 e 50) e rejeita 51', async () => {
+        const categoryUuid = await createCategory();
+        await createBook(categoryUuid, { Title: 'Único' });
+
+        expect((await request(app).get('/books').query({ limit: 1 })).status).toBe(200);
+        expect((await request(app).get('/books').query({ limit: 50 })).status).toBe(200);
+        expect((await request(app).get('/books').query({ limit: 51 })).status).toBe(400);
+    });
+
+    it('rejeita parâmetros repetidos (array) e vazios (400)', async () => {
+        expect((await request(app).get('/books?limit=1&limit=2')).status).toBe(400);
+        expect((await request(app).get('/books').query({ limit: '' })).status).toBe(400);
+        expect((await request(app).get('/books').query({ title: '' })).status).toBe(400);
+        expect((await request(app).get('/books').query({ limit: '2.5' })).status).toBe(400);
+    });
+
+    it('combina filtro, ordenação e paginação na mesma consulta', async () => {
+        const romance = await createCategory('Romance');
+        for (const title of ['A', 'B', 'C']) {
+            await createBook(romance, { Title: title });
+        }
+
+        const res = await request(app)
+            .get('/books')
+            .query({ categoryUuid: romance, sort: 'Title', order: 'asc', limit: 1, offset: 1 });
+        expect(res.status).toBe(200);
+        expect(res.body.data.map((b: { Title: string }) => b.Title)).toEqual(['B']);
+        expect(res.body.meta).toMatchObject({ total: 3, limit: 1, offset: 1, hasMore: true });
+    });
+
+    it('ignora livros de outros status mesmo filtrando por dono', async () => {
+        const other = await registerAndLogin(app);
+        const categoryUuid = await createCategory();
+        await request(app)
+            .post('/books')
+            .set(bearer(other.token))
+            .send({ Title: 'Disponível do outro', Autor: 'A', CategoryUuid: categoryUuid });
+        await request(app)
+            .post('/books')
+            .set(bearer(other.token))
+            .send({ Title: 'Trocado do outro', Autor: 'A', CategoryUuid: categoryUuid, Status: 'traded' });
+
+        const res = await request(app).get('/books').query({ ownerUuid: other.Uuid });
+        expect(res.body.data.map((b: { Title: string }) => b.Title)).toEqual([
+            'Disponível do outro',
+        ]);
+    });
+});
+
 describe('BookCopy', () => {
     it('executa o ciclo CRUD completo', async () => {
         const payload = {

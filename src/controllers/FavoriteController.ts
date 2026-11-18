@@ -46,8 +46,9 @@ export class FavoriteController {
 
     public async listBooks(req: Request, res: Response): Promise<Response> {
         const pagination = parsePagination(req.query.limit, req.query.offset);
+        // FavoriteBook só possui createdAt/updatedAt; Title/Autor vivem em Book.
         const sort = parseSort(req.query.sort, req.query.order, {
-            fields: ['createdAt', 'updatedAt', 'Title', 'Autor'],
+            fields: ['createdAt', 'updatedAt'],
         });
         const page = await favoriteService.listFavoriteBooks(
             req.user!.Id,

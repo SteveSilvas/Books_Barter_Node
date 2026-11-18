@@ -555,7 +555,7 @@ executá-los.
 npm test
 ```
 
-Cobertura atual (78 casos): criação/listagem/busca/atualização/remoção de usuários, login válido e
+Cobertura atual (90 casos): criação/listagem/busca/atualização/remoção de usuários, login válido e
 inválido, senha com hash (não em texto puro), **token JWT** e rotas protegidas (401 sem token/token
 inválido), **perfil próprio vs. público** (e-mail oculto de terceiros), edição de perfil com
 validação (nome/e-mail/data), **troca de senha** (senha atual obrigatória), **posse do recurso**
@@ -566,7 +566,8 @@ troca para `reserved`/`traded`, 400 para inexistente), `Uuid` inválido (400) e 
 e-mail duplicado, recurso e rota inexistentes, **catálogo paginado** (`limit`/`offset` + metadados),
 **ordenação** (allowlist, 400 fora dela), **filtros** (categoria/status/dono), **estante pública de
 terceiros** (por UUID, 400/404), **seguir/deixar de seguir** (listas paginadas, contadores, 400/401/404/409),
-**favoritar estantes e livros** (listas privadas, 400/401/404/409), e o ciclo CRUD completo de `books`,
+**favoritar estantes e livros** (listas privadas, ordenação, isolamento por usuário, 400/401/404/409),
+e o ciclo CRUD completo de `books`,
 `categories`, `book-copies` e `addresses` — verificando os status HTTP esperados
 (`200`, `201`, `204`, `400`, `401`, `403`, `404`, `409`).
 

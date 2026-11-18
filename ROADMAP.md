@@ -60,7 +60,7 @@ Fundação técnica e recursos de apoio já entregues:
 | CRUD de exemplares (`/book-copies`) | ✅ | `BookCopyService` |
 | CRUD de endereços (`/addresses`) | ✅ | `AddressService` |
 | Middlewares de erro/404 e `AppError` com status HTTP | ✅ | `src/middlewares`, `src/errors` |
-| Suíte de testes de integração (Jest + Supertest, SQLite em memória, 78 casos) | ✅ | `tests/` |
+| Suíte de testes de integração (Jest + Supertest, SQLite em memória, 90 casos) | ✅ | `tests/` |
 | Dialeto duplo MySQL/SQLite por configuração (`DB_DIALECT`) | ✅ | `src/config/env.ts`, `src/database/index.ts` |
 | Documentação (README + AGENTS.md) alinhada ao código | ✅ | `README.md`, `AGENTS.md` |
 
