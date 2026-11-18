@@ -44,8 +44,8 @@ já foi entregue e do que ainda precisa ser desenvolvido.
 
 | # | Regra de negócio | Status | O que existe no código hoje |
 |---|------------------|--------|------------------------------|
-| 1 | Acesso autenticado | 🟡 Parcial | Cadastro (`POST /users/add`) e login por e-mail/senha (`POST /users/login`). **Falta** login via Google e sessão/token (hoje o login apenas retorna os dados do usuário). |
-| 2 | Ver e editar perfil | ✅ Implementado | Consulta por id/e-mail e `PUT /users/update` (edição de perfil). O update persiste os campos enviados e impede e-mail duplicado. |
+| 1 | Acesso autenticado | 🟡 Parcial | Cadastro (`POST /users`) e login por e-mail/senha (`POST /users/login`). **Falta** login via Google e sessão/token (hoje o login apenas retorna os dados do usuário). |
+| 2 | Ver e editar perfil | ✅ Implementado | Consulta por id/e-mail e `PUT /users/:id` (edição de perfil). O update persiste apenas os campos enviados (parcial) e impede e-mail duplicado. |
 | 3 | Estante digital pública | 🟡 Parcial | Cadastro e listagem de livros (`/books`). **Falta** o vínculo `Book → User` (não há noção de "dono" da estante). |
 | 4 | Visibilidade da estante de outros | 🔴 Pendente | Existe listagem geral de livros, mas **sem filtro por usuário/estante**. |
 | 5 | Seguir / deixar de seguir | 🔴 Pendente | Não implementado (sem entidade de relacionamento entre usuários). |
@@ -54,21 +54,62 @@ já foi entregue e do que ainda precisa ser desenvolvido.
 
 **Legenda:** ✅ implementado · 🟡 parcial · 🔴 pendente.
 
-### Estruturas já preparadas (aguardando uso)
+### Recursos de apoio já disponíveis
 
-Alguns models e controllers já foram criados para dar suporte a essas regras, mas ainda não estão
-conectados à aplicação:
+Além do núcleo de usuários/livros, a API já expõe CRUD completo (tipado e com status HTTP corretos)
+para os recursos de apoio que essas regras vão consumir:
 
-* **`BookCopy`** (exemplares físicos dos livros) e **`Category`** (categorias de livros) possuem
-  model, controller e rotas — porém as rotas estão comentadas em `src/index.ts`.
-* **`Address`** possui model, controller e rotas (também comentadas), útil para endereços/logística de troca.
+* **`Category`** — categorias de livros (`/categories`), usadas na classificação dos livros.
+* **`BookCopy`** — exemplares físicos dos livros (`/book-copies`), base para a logística de escambo.
+* **`Address`** — endereços (`/addresses`), úteis para a negociação/logística de troca.
+
+---
+
+## 🧱 Arquitetura e separação de responsabilidades
+
+O código segue uma arquitetura em camadas, cada uma com uma responsabilidade única e com tipos
+explícitos em toda a fronteira entre elas:
+
+| Camada | Pasta | Responsabilidade |
+|--------|-------|------------------|
+| **Rotas** | `src/routes` | Mapeiam método HTTP + caminho para um handler do controller (verbos RESTful). |
+| **Controllers** | `src/controllers` | Traduzem HTTP ↔ domínio: leem `req`, montam o DTO e devolvem a resposta com o status HTTP correto. Não contêm regra de negócio. |
+| **Services** | `src/services` | Concentram as **regras de negócio** e o acesso aos models. Lançam `AppError` com o status HTTP adequado. |
+| **Models** | `src/models` | Definem o schema e as associações do Sequelize (classes tipadas). |
+| **Middlewares** | `src/middlewares` | `asyncHandler` (propaga erros de handlers assíncronos), `errorHandler` (traduz `AppError` → resposta HTTP) e `notFoundHandler` (404). |
+| **Infra** | `src/config`, `src/database`, `src/errors`, `src/utils`, `src/@types` | Configuração de ambiente, conexão, erro de aplicação, utilitários e DTOs. |
+
+O fluxo de uma requisição é: `rota → controller → service → model`, e qualquer erro sobe até o
+`errorHandler`, que responde com o código HTTP apropriado.
+
+### Status HTTP utilizados
+
+| Código | Uso |
+|--------|-----|
+| `200 OK` | Leitura e atualização bem-sucedidas |
+| `201 Created` | Recurso criado (POST) |
+| `204 No Content` | Recurso removido (DELETE) |
+| `400 Bad Request` | Parâmetro inválido (ex.: `id` não numérico) |
+| `401 Unauthorized` | Credenciais inválidas no login |
+| `404 Not Found` | Recurso ou rota inexistente |
+| `409 Conflict` | E-mail já cadastrado |
+| `500 Internal Server Error` | Erro inesperado |
+
+### Verificação de tipos
+
+O projeto é **TypeScript com `strict: true`** e tipagem explícita nas camadas de DTO, models,
+services e controllers — sem `any` e sem `require`/`module.exports`. Para conferir:
+
+```bash
+npx tsc --noEmit
+```
 
 ---
 
 ## 🛠️ Tecnologias Utilizadas
 
 * **Runtime:** Node.js
-* **Linguagem:** TypeScript (compilado com `tsc`, executado em dev com `ts-node-dev`)
+* **Linguagem:** TypeScript (`strict: true`), compilado com `tsc` e executado em dev com `ts-node-dev`
 * **Framework HTTP:** Express 4
 * **ORM:** Sequelize 6
 * **Banco de Dados:** MySQL (`mysql2`)
@@ -81,32 +122,50 @@ conectados à aplicação:
 ```
 .
 ├── src
-│   ├── index.ts                # Bootstrap do Express e registro das rotas
-│   ├── ConnectionDB.ts         # Conexão com o banco (Sequelize)
-│   ├── @types                  # Tipos (UserType, LoginType)
-│   ├── Services
-│   │   └── UserService.ts      # Regras de negócio de usuário (CRUD + Login)
-│   ├── controller              # Controllers por entidade
+│   ├── index.ts                # Bootstrap: conecta no banco, sincroniza e sobe o servidor
+│   ├── app.ts                  # Cria e configura a instância do Express
+│   ├── @types                  # DTOs e tipos (user, auth, book, category, bookCopy, address)
+│   ├── config
+│   │   └── env.ts              # Leitura e validação das variáveis de ambiente
+│   ├── database
+│   │   └── index.ts            # Instância do Sequelize (conexão)
+│   ├── errors
+│   │   └── AppError.ts         # Erro de aplicação com código HTTP
+│   ├── middlewares
+│   │   ├── asyncHandler.ts     # Encaminha rejeições para o errorHandler
+│   │   ├── errorHandler.ts     # Traduz erros em respostas HTTP
+│   │   └── notFoundHandler.ts  # 404 para rotas desconhecidas
+│   ├── utils
+│   │   └── parseId.ts          # Valida/converte parâmetros de id
+│   ├── models                  # Models Sequelize tipados
+│   │   ├── index.ts            # Barrel + syncDatabase()
+│   │   ├── User.ts
+│   │   ├── Book.ts
+│   │   ├── Category.ts
+│   │   ├── BookCopy.ts
+│   │   └── Address.ts
+│   ├── services                # Regras de negócio
+│   │   ├── UserService.ts
+│   │   ├── BookService.ts
+│   │   ├── CategoryService.ts
+│   │   ├── BookCopyService.ts
+│   │   └── AddressService.ts
+│   ├── controllers             # Camada HTTP (finos)
 │   │   ├── UserController.ts
 │   │   ├── BookController.ts
-│   │   ├── BookCategoryController.ts
+│   │   ├── CategoryController.ts
 │   │   ├── BookCopyController.ts
 │   │   └── AddressController.ts
-│   ├── entity                  # Models Sequelize
-│   │   ├── UserEntity.ts
-│   │   ├── BookEntity.ts
-│   │   ├── CategoryEntity.ts
-│   │   ├── BookCopyEntity.ts
-│   │   └── AddressEntity.ts
-│   └── router                  # Definição das rotas Express
+│   └── routes                  # Definição das rotas (RESTful)
+│       ├── index.ts            # Agrega todos os routers
 │       ├── status.routes.ts
 │       ├── user.routes.ts
 │       ├── book.routes.ts
-│       ├── bookCategory.routes.ts
+│       ├── category.routes.ts
 │       ├── bookCopy.routes.ts
 │       └── address.routes.ts
 ├── documentation               # Requisitos e diagrama de caso de uso
-├── dist                        # Saída da compilação (gerada por `npm run build`)
+├── dist                        # Saída da compilação (gerada por `npm run build`, ignorada pelo git)
 ├── .env.example                # Modelo das variáveis de ambiente
 ├── package.json
 └── tsconfig.json
@@ -114,41 +173,81 @@ conectados à aplicação:
 
 ---
 
-## 🔌 Rotas implementadas
+## 🔌 Endpoints
 
-Rotas efetivamente registradas hoje em `src/index.ts`:
+Todos os recursos expõem o CRUD RESTful completo. `{id}` é sempre um inteiro positivo.
 
-| Método | Rota                  | Descrição                          | Corpo da requisição |
-|--------|-----------------------|------------------------------------|---------------------|
-| GET    | `/status`             | Health check da API                | —                   |
-| GET    | `/users`              | Lista todos os usuários            | —                   |
-| POST   | `/users/add`          | Cadastra um usuário                | `{ Name, Birth, Email, Pass }` |
-| POST   | `/users/login`        | Autentica um usuário               | `{ Email, Pass }`   |
-| GET    | `/users/:id`          | Busca usuário por id               | —                   |
-| GET    | `/users/email/:email` | Busca usuário por e-mail           | —                   |
-| PUT    | `/users/update`       | Atualiza um usuário                | `{ Id, Name, Birth, Email, Pass }` |
-| DELETE | `/users/delete`       | Remove um usuário                  | `{ Id }`            |
-| GET    | `/books`              | Lista livros (ordem decrescente por id, com a categoria) | — |
-| POST   | `/books/add`          | Cadastra um livro                  | `{ data: { Title, Autor, CategoryId, CreationDate, CreationLocality } }` |
-| GET    | `/books/:Id`          | Busca livro por id                 | —                   |
-| PUT    | `/books/update`       | Atualiza um livro                  | `{ Id, Title, Autor, CreationDate, CreationLocality }` |
-| DELETE | `/books/delete`       | Remove um livro                    | `{ Id }`            |
+### Status
 
-### Rotas definidas mas não registradas
+| Método | Rota | Descrição | Corpo |
+|--------|------|-----------|-------|
+| GET | `/status` | Health check da API | — |
 
-Os arquivos abaixo existem, mas as rotas estão comentadas em `src/index.ts` e, portanto,
-não respondem ainda:
+### Usuários
 
-* `src/router/bookCategory.routes.ts` — `/category`, `/category/add`, `/category/:Id`, `/category/update`, `/category/delete`
-* `src/router/bookCopy.routes.ts` — `/books`, `/books/add`, `/books/:Id`, `/books/update`, `/books/delete`
-* `src/router/address.routes.ts` — `/address`, `/address/add`, `/address/:Id`, `/boaddressoks/update`, `/address/delete`
-  (atenção: a rota de atualização de endereço tem um erro de digitação no caminho — `boaddressoks`)
+| Método | Rota | Descrição | Corpo |
+|--------|------|-----------|-------|
+| GET | `/users` | Lista todos os usuários | — |
+| POST | `/users` | Cadastra um usuário | `{ Name, Birth, Email, Pass }` |
+| POST | `/users/login` | Autentica um usuário | `{ Email, Pass }` |
+| GET | `/users/:id` | Busca usuário por id | — |
+| GET | `/users/email/:email` | Busca usuário por e-mail | — |
+| PUT | `/users/:id` | Atualiza um usuário (aceita atualização parcial) | `{ Name?, Birth?, Email?, Pass? }` |
+| DELETE | `/users/:id` | Remove um usuário | — |
+
+### Livros
+
+| Método | Rota | Descrição | Corpo |
+|--------|------|-----------|-------|
+| GET | `/books` | Lista livros (ordem decrescente por id, com a categoria) | — |
+| POST | `/books` | Cadastra um livro | `{ Title, Autor, CategoryId, CreationDate?, CreationLocality? }` |
+| GET | `/books/:id` | Busca livro por id | — |
+| PUT | `/books/:id` | Atualiza um livro | `{ Title?, Autor?, CategoryId?, CreationDate?, CreationLocality? }` |
+| DELETE | `/books/:id` | Remove um livro | — |
+
+### Categorias
+
+| Método | Rota | Descrição | Corpo |
+|--------|------|-----------|-------|
+| GET | `/categories` | Lista categorias | — |
+| POST | `/categories` | Cadastra uma categoria | `{ Description }` |
+| GET | `/categories/:id` | Busca categoria por id | — |
+| PUT | `/categories/:id` | Atualiza uma categoria | `{ Description? }` |
+| DELETE | `/categories/:id` | Remove uma categoria | — |
+
+### Exemplares de livros (BookCopy)
+
+| Método | Rota | Descrição | Corpo |
+|--------|------|-----------|-------|
+| GET | `/book-copies` | Lista exemplares | — |
+| POST | `/book-copies` | Cadastra um exemplar | `{ ISBN?, Editora, TypePrint, PublicationDate, PublicationLocality? }` |
+| GET | `/book-copies/:id` | Busca exemplar por id | — |
+| PUT | `/book-copies/:id` | Atualiza um exemplar | `{ ISBN?, Editora?, TypePrint?, PublicationDate?, PublicationLocality? }` |
+| DELETE | `/book-copies/:id` | Remove um exemplar | — |
+
+### Endereços
+
+| Método | Rota | Descrição | Corpo |
+|--------|------|-----------|-------|
+| GET | `/addresses` | Lista endereços | — |
+| POST | `/addresses` | Cadastra um endereço | `{ Rua, Numero, Complemento, Bairro, Cep, Cidade, Estado, Pais }` |
+| GET | `/addresses/:id` | Busca endereço por id | — |
+| PUT | `/addresses/:id` | Atualiza um endereço | campos parciais do endereço |
+| DELETE | `/addresses/:id` | Remove um endereço | — |
+
+### Formato de erro
+
+Erros retornam o status HTTP adequado e um corpo padronizado:
+
+```json
+{ "status": 404, "message": "Usuário não encontrado." }
+```
 
 ---
 
 ## 🗄️ Modelos de dados
 
-Definidos em `src/entity/` com Sequelize:
+Definidos em `src/models/` como classes Sequelize tipadas:
 
 * **User:** `Id`, `Name`, `Birth`, `Email` (único), `Pass`
 * **Book:** `Id`, `Title`, `Autor`, `CreationDate`, `CreationLocality`, `CategoryId` (`belongsTo` Category)
@@ -156,9 +255,8 @@ Definidos em `src/entity/` com Sequelize:
 * **BookCopy:** `Id`, `ISBN`, `Editora`, `TypePrint`, `PublicationDate`, `PublicationLocality`
 * **Address:** `Id`, `Rua`, `Numero`, `Complemento`, `Bairro`, `Cep`, `Cidade`, `Estado`, `Pais`
 
-O model `UserEntity` chama `database.sync()`, o que cria/atualiza a tabela de usuários
-automaticamente na inicialização. Os demais models não executam `sync` (as chamadas estão
-comentadas), sendo necessário criá-los manualmente no banco.
+Na inicialização (`src/index.ts`), a aplicação chama `sequelize.authenticate()` e `sequelize.sync()`,
+criando/atualizando todas as tabelas automaticamente.
 
 ---
 
@@ -187,7 +285,7 @@ comentadas), sendo necessário criá-los manualmente no banco.
    Crie um arquivo `.env` na raiz do projeto, com base no `.env.example`:
 
    ```env
-   # Banco de Dados (usado por src/ConnectionDB.ts)
+   # Banco de Dados (usado por src/config/env.ts e src/database/index.ts)
    DB_NAME=nome_do_banco
    DB_USER=usuario
    DB_PASSWORD=senha
@@ -195,12 +293,12 @@ comentadas), sendo necessário criá-los manualmente no banco.
    DB_PORT=3306
    DB_DIALECT=mysql
 
-   # Porta do servidor HTTP (o app lê a variável PORT; o padrão é 3000)
+   # Porta do servidor HTTP (padrão: 3000)
    PORT=3000
    ```
 
-   > Observação: o `.env.example` do repositório traz a chave `SERVER_PORT`, mas o
-   > `src/index.ts` lê `process.env.PORT`. Use `PORT` para definir a porta da API.
+   As variáveis `DB_NAME`, `DB_USER` e `DB_HOST` são obrigatórias — se faltarem, a aplicação
+   falha na inicialização com uma mensagem clara.
 
 4. **Inicie o servidor de desenvolvimento:**
    ```bash
