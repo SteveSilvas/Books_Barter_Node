@@ -108,13 +108,13 @@ npx tsc --noEmit
 
 ## 🛠️ Tecnologias Utilizadas
 
-* **Runtime:** Node.js
-* **Linguagem:** TypeScript (`strict: true`), compilado com `tsc` e executado em dev com `ts-node-dev`
-* **Framework HTTP:** Express 4
+* **Runtime:** Node.js 26 (LTS)
+* **Linguagem:** TypeScript 7 (`strict: true`), compilado com `tsc` e executado em dev com `tsx`
+* **Framework HTTP:** Express 5
 * **ORM:** Sequelize 6
 * **Banco de Dados:** MySQL (`mysql2`)
 * **Utilitários:** `cors`, `dotenv`, `http-status-codes`
-* **Testes:** Jest + Supertest (SQLite em memória)
+* **Testes:** Jest + Supertest com `@swc/jest` (SQLite em memória)
 
 ---
 
@@ -173,7 +173,8 @@ npx tsc --noEmit
 ├── documentation               # Requisitos e diagrama de caso de uso
 ├── dist                        # Saída da compilação (gerada por `npm run build`, ignorada pelo git)
 ├── .env.example                # Modelo das variáveis de ambiente
-├── jest.config.js              # Configuração do Jest
+├── .nvmrc                      # Versão do Node recomendada (26.13.1)
+├── jest.config.js              # Configuração do Jest (@swc/jest)
 ├── tsconfig.json               # Build de produção (apenas src)
 ├── tsconfig.test.json          # Type-check dos testes
 └── package.json
@@ -270,9 +271,11 @@ criando/atualizando todas as tabelas automaticamente.
 
 ## 🚀 Pré-requisitos
 
-* [Node.js](https://nodejs.org) (v18 ou superior)
+* [Node.js](https://nodejs.org) **26 ou superior** (LTS atual). O projeto fixa a versão em `.nvmrc`
+  (`nvm use` / `fnm use` para adotá-la) e declara `engines.node >= 26`.
+* MySQL 8 (ou um container `mysql:8`). Para os testes automatizados **não é necessário** MySQL,
+  pois a suíte usa SQLite em memória.
 * [Git](https://git-scm.com)
-* Um servidor **MySQL** acessível
 
 ---
 
@@ -284,8 +287,9 @@ criando/atualizando todas as tabelas automaticamente.
    cd Books_Barter_Node
    ```
 
-2. **Instale as dependências:**
+2. **Use a versão correta do Node e instale as dependências:**
    ```bash
+   nvm use        # ou: fnm use  (lê a versão de .nvmrc — Node 26)
    npm install
    ```
 
@@ -328,19 +332,21 @@ criando/atualizando todas as tabelas automaticamente.
 
 | Script | Comando | Descrição |
 |--------|---------|-----------|
-| `npm run dev`   | `ts-node-dev --respawn --transpile-only ... src/index.ts` | Ambiente de desenvolvimento |
+| `npm run dev`   | `tsx watch src/index.ts` | Ambiente de desenvolvimento (reload automático) |
 | `npm run build` | `tsc -p .` | Compila o TypeScript para `dist/` |
 | `npm start`     | `node ./dist/index.js` | Executa o build de produção |
 | `npm test`      | `jest --runInBand` | Executa a suíte de testes automatizados |
 | `npm run test:watch` | `jest --watch` | Executa os testes em modo watch |
+| `npm run typecheck` | `tsc -p tsconfig.test.json` | Checa os tipos de `src` e `tests` |
 
 ---
 
 ## 🧪 Testes
 
-A suíte usa **Jest + Supertest** e cobre as rotas via requisições HTTP reais contra a aplicação
-Express. Os testes rodam com **SQLite em memória** (dialeto configurado por `DB_DIALECT=sqlite`),
-então **não é necessário ter um MySQL rodando** para executá-los.
+A suíte usa **Jest + Supertest** (transformando TypeScript com `@swc/jest`) e cobre as rotas via
+requisições HTTP reais contra a aplicação Express. Os testes rodam com **SQLite em memória**
+(dialeto configurado por `DB_DIALECT=sqlite`), então **não é necessário ter um MySQL rodando** para
+executá-los.
 
 ```bash
 npm test
@@ -364,7 +370,7 @@ tests/
 Para checar os tipos dos testes:
 
 ```bash
-npx tsc -p tsconfig.test.json
+npm run typecheck
 ```
 
 ---

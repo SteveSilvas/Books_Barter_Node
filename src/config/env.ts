@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 import { Dialect } from 'sequelize';
 
-dotenv.config({ path: '.env' });
+dotenv.config({ path: '.env', quiet: true });
 
 function required(name: string): string {
     const value = process.env[name];

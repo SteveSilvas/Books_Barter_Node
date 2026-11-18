@@ -3,22 +3,27 @@
 ## Projeto
 
 `escambo-literario-api` (EscamboLiterário) — API REST de escambo de livros.
-Node.js + TypeScript + Express 4 + Sequelize 6 + MySQL (`mysql2`); testes com Jest + Supertest + SQLite.
+Node.js 26 + TypeScript 7 + Express 5 + Sequelize 6 + MySQL (`mysql2`); testes com Jest + Supertest + SQLite.
 
 ## Comandos
 
 ```bash
-npm run dev      # ts-node-dev
+npm run dev      # tsx watch src/index.ts (reload automático)
 npm run build    # tsc -p .  (apenas src)
 npm start        # node ./dist/index.js
 npm test         # jest --runInBand (SQLite em memória, sem MySQL)
-npx tsc --noEmit # checagem de tipos do código-fonte
-npx tsc -p tsconfig.test.json # checagem de tipos dos testes
+npm run typecheck # tsc -p tsconfig.test.json (checa src + tests)
+npx tsc --noEmit # checagem de tipos apenas do código-fonte
 ```
 
-Testes automatizados usam **Jest + Supertest** com SQLite (`DB_DIALECT=sqlite`, configurado em
-`tests/setup-env.ts`), então não exigem MySQL. Testes manuais de runtime exigem MySQL
-(use um container `mysql:8`).
+Versão do Node fixada em `.nvmrc` (26.13.1) e em `engines.node >= 26`.
+
+Testes automatizados usam **Jest + Supertest** com transform `@swc/jest` e SQLite
+(`DB_DIALECT=sqlite`, configurado em `tests/setup-env.ts`), então não exigem MySQL. Testes manuais
+de runtime exigem MySQL (use um container `mysql:8`).
+
+> TypeScript 7 é o port nativo (`tsc`); ferramentas que usam a API interna do compilador
+> (ts-jest/ts-node) não funcionam com ele. Por isso o dev usa `tsx` e o Jest usa `@swc/jest`.
 
 ## Arquitetura (arquivos por camada)
 

@@ -3,7 +3,7 @@ import { StatusCodes } from 'http-status-codes';
 import { LoginType } from '../@types/auth';
 import { CreateUserDTO, UpdateUserDTO } from '../@types/user';
 import { userService } from '../services/UserService';
-import { parseId } from '../utils/parseId';
+import { parseId, parseParam } from '../utils/parseId';
 
 export class UserController {
     public async list(req: Request, res: Response): Promise<Response> {
@@ -18,7 +18,8 @@ export class UserController {
     }
 
     public async getByEmail(req: Request, res: Response): Promise<Response> {
-        const user = await userService.getByEmail(req.params.email);
+        const email = parseParam(req.params.email, 'E-mail');
+        const user = await userService.getByEmail(email);
         return res.status(StatusCodes.OK).json(user);
     }
 
