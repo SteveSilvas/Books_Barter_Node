@@ -1,5 +1,5 @@
 export interface AddressType {
-    Id: number;
+    Uuid: string;
     Rua: string;
     Numero: string;
     Complemento: string;

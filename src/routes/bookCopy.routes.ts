@@ -7,8 +7,8 @@ const router = Router();
 
 router.get('/book-copies', asyncHandler(bookCopyController.list));
 router.post('/book-copies', authenticate, asyncHandler(bookCopyController.create));
-router.get('/book-copies/:id', asyncHandler(bookCopyController.getById));
-router.put('/book-copies/:id', authenticate, asyncHandler(bookCopyController.update));
-router.delete('/book-copies/:id', authenticate, asyncHandler(bookCopyController.remove));
+router.get('/book-copies/:uuid', asyncHandler(bookCopyController.getByUuid));
+router.put('/book-copies/:uuid', authenticate, asyncHandler(bookCopyController.update));
+router.delete('/book-copies/:uuid', authenticate, asyncHandler(bookCopyController.remove));
 
 export default router;

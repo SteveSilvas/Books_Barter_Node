@@ -9,10 +9,10 @@ import { BookCopy } from '../models';
 
 export interface IBookCopyService {
     list(): Promise<BookCopyType[]>;
-    getById(id: number): Promise<BookCopyType>;
+    getByUuid(uuid: string): Promise<BookCopyType>;
     create(data: CreateBookCopyDTO): Promise<BookCopyType>;
-    update(id: number, data: UpdateBookCopyDTO): Promise<BookCopyType>;
-    remove(id: number): Promise<void>;
+    update(uuid: string, data: UpdateBookCopyDTO): Promise<BookCopyType>;
+    remove(uuid: string): Promise<void>;
 }
 
 export class BookCopyService implements IBookCopyService {
@@ -21,8 +21,8 @@ export class BookCopyService implements IBookCopyService {
         return copies.map((copy) => copy.get({ plain: true }) as BookCopyType);
     }
 
-    public async getById(id: number): Promise<BookCopyType> {
-        const copy = await BookCopy.findByPk(id);
+    public async getByUuid(uuid: string): Promise<BookCopyType> {
+        const copy = await BookCopy.findOne({ where: { Uuid: uuid } });
         if (!copy) {
             throw new AppError('Exemplar não encontrado.', StatusCodes.NOT_FOUND);
         }
@@ -34,8 +34,8 @@ export class BookCopyService implements IBookCopyService {
         return copy.get({ plain: true }) as BookCopyType;
     }
 
-    public async update(id: number, data: UpdateBookCopyDTO): Promise<BookCopyType> {
-        const copy = await BookCopy.findByPk(id);
+    public async update(uuid: string, data: UpdateBookCopyDTO): Promise<BookCopyType> {
+        const copy = await BookCopy.findOne({ where: { Uuid: uuid } });
         if (!copy) {
             throw new AppError('Exemplar não encontrado.', StatusCodes.NOT_FOUND);
         }
@@ -52,8 +52,8 @@ export class BookCopyService implements IBookCopyService {
         return copy.get({ plain: true }) as BookCopyType;
     }
 
-    public async remove(id: number): Promise<void> {
-        const copy = await BookCopy.findByPk(id);
+    public async remove(uuid: string): Promise<void> {
+        const copy = await BookCopy.findOne({ where: { Uuid: uuid } });
         if (!copy) {
             throw new AppError('Exemplar não encontrado.', StatusCodes.NOT_FOUND);
         }

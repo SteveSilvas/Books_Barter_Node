@@ -9,10 +9,10 @@ import { Address } from '../models';
 
 export interface IAddressService {
     list(): Promise<AddressType[]>;
-    getById(id: number): Promise<AddressType>;
+    getByUuid(uuid: string): Promise<AddressType>;
     create(data: CreateAddressDTO): Promise<AddressType>;
-    update(id: number, data: UpdateAddressDTO): Promise<AddressType>;
-    remove(id: number): Promise<void>;
+    update(uuid: string, data: UpdateAddressDTO): Promise<AddressType>;
+    remove(uuid: string): Promise<void>;
 }
 
 export class AddressService implements IAddressService {
@@ -21,8 +21,8 @@ export class AddressService implements IAddressService {
         return addresses.map((address) => address.get({ plain: true }) as AddressType);
     }
 
-    public async getById(id: number): Promise<AddressType> {
-        const address = await Address.findByPk(id);
+    public async getByUuid(uuid: string): Promise<AddressType> {
+        const address = await Address.findOne({ where: { Uuid: uuid } });
         if (!address) {
             throw new AppError('Endereço não encontrado.', StatusCodes.NOT_FOUND);
         }
@@ -34,8 +34,8 @@ export class AddressService implements IAddressService {
         return address.get({ plain: true }) as AddressType;
     }
 
-    public async update(id: number, data: UpdateAddressDTO): Promise<AddressType> {
-        const address = await Address.findByPk(id);
+    public async update(uuid: string, data: UpdateAddressDTO): Promise<AddressType> {
+        const address = await Address.findOne({ where: { Uuid: uuid } });
         if (!address) {
             throw new AppError('Endereço não encontrado.', StatusCodes.NOT_FOUND);
         }
@@ -53,8 +53,8 @@ export class AddressService implements IAddressService {
         return address.get({ plain: true }) as AddressType;
     }
 
-    public async remove(id: number): Promise<void> {
-        const address = await Address.findByPk(id);
+    public async remove(uuid: string): Promise<void> {
+        const address = await Address.findOne({ where: { Uuid: uuid } });
         if (!address) {
             throw new AppError('Endereço não encontrado.', StatusCodes.NOT_FOUND);
         }

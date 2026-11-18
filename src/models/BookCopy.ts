@@ -12,6 +12,7 @@ export class BookCopy extends Model<
     InferCreationAttributes<BookCopy>
 > {
     declare Id: CreationOptional<number>;
+    declare Uuid: CreationOptional<string>;
     declare ISBN: CreationOptional<string | null>;
     declare Editora: string;
     declare TypePrint: string;
@@ -28,6 +29,12 @@ BookCopy.init(
             autoIncrement: true,
             allowNull: false,
             primaryKey: true,
+        },
+        Uuid: {
+            type: DataTypes.UUID,
+            allowNull: false,
+            unique: true,
+            defaultValue: DataTypes.UUIDV4,
         },
         ISBN: {
             type: DataTypes.STRING,

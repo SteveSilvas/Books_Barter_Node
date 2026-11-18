@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { CreateAddressDTO, UpdateAddressDTO } from '../@types/address';
 import { addressService } from '../services/AddressService';
-import { parseId } from '../utils/parseId';
+import { parseUuid } from '../utils/parseId';
 
 export class AddressController {
     public async list(req: Request, res: Response): Promise<Response> {
@@ -10,9 +10,9 @@ export class AddressController {
         return res.status(StatusCodes.OK).json(addresses);
     }
 
-    public async getById(req: Request, res: Response): Promise<Response> {
-        const id = parseId(req.params.id);
-        const address = await addressService.getById(id);
+    public async getByUuid(req: Request, res: Response): Promise<Response> {
+        const uuid = parseUuid(req.params.uuid);
+        const address = await addressService.getByUuid(uuid);
         return res.status(StatusCodes.OK).json(address);
     }
 
@@ -32,7 +32,7 @@ export class AddressController {
     }
 
     public async update(req: Request, res: Response): Promise<Response> {
-        const id = parseId(req.params.id);
+        const uuid = parseUuid(req.params.uuid);
         const data: UpdateAddressDTO = {
             Rua: req.body.Rua,
             Numero: req.body.Numero,
@@ -43,13 +43,13 @@ export class AddressController {
             Estado: req.body.Estado,
             Pais: req.body.Pais,
         };
-        const address = await addressService.update(id, data);
+        const address = await addressService.update(uuid, data);
         return res.status(StatusCodes.OK).json(address);
     }
 
     public async remove(req: Request, res: Response): Promise<Response> {
-        const id = parseId(req.params.id);
-        await addressService.remove(id);
+        const uuid = parseUuid(req.params.uuid);
+        await addressService.remove(uuid);
         return res.status(StatusCodes.NO_CONTENT).send();
     }
 }

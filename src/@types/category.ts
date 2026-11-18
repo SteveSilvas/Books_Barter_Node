@@ -1,5 +1,5 @@
 export interface CategoryType {
-    Id: number;
+    Uuid: string;
     Description: string;
     createdAt?: Date;
     updatedAt?: Date;

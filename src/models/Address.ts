@@ -12,6 +12,7 @@ export class Address extends Model<
     InferCreationAttributes<Address>
 > {
     declare Id: CreationOptional<number>;
+    declare Uuid: CreationOptional<string>;
     declare Rua: string;
     declare Numero: string;
     declare Complemento: string;
@@ -31,6 +32,12 @@ Address.init(
             autoIncrement: true,
             allowNull: false,
             primaryKey: true,
+        },
+        Uuid: {
+            type: DataTypes.UUID,
+            allowNull: false,
+            unique: true,
+            defaultValue: DataTypes.UUIDV4,
         },
         Rua: { type: DataTypes.STRING, allowNull: false },
         Numero: { type: DataTypes.STRING, allowNull: false },

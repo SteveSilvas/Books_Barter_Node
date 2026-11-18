@@ -3,7 +3,7 @@ import request from 'supertest';
 
 export interface AuthContext {
     token: string;
-    Id: number;
+    Uuid: string;
     Email: string;
 }
 
@@ -26,7 +26,7 @@ export async function registerAndLogin(
     });
 
     const login = await request(app).post('/users/login').send({ Email, Pass });
-    return { token: login.body.token, Id: login.body.data.Id, Email };
+    return { token: login.body.token, Uuid: login.body.data.Uuid, Email };
 }
 
 /** Monta o header Authorization a partir de um token. */

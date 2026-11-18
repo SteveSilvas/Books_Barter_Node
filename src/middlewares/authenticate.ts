@@ -18,6 +18,6 @@ export function authenticate(req: Request, _res: Response, next: NextFunction): 
 
     const token = header.slice('Bearer '.length).trim();
     const payload = verifyToken(token);
-    req.user = { Id: payload.sub, Email: payload.email };
+    req.user = { Id: payload.sub, Uuid: payload.uuid, Email: payload.email };
     next();
 }

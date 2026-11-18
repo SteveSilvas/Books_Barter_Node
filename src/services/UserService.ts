@@ -21,7 +21,7 @@ import {
 
 export interface IUserService {
     list(): Promise<PublicUserType[]>;
-    getById(id: number): Promise<PublicUserType>;
+    getByUuid(uuid: string): Promise<PublicUserType>;
     getByEmail(email: string): Promise<PublicUserType>;
     getProfile(id: number): Promise<UserType>;
     create(data: CreateUserDTO): Promise<UserType>;
@@ -33,25 +33,28 @@ export interface IUserService {
 
 /** Perfil do próprio usuário (dono da conta), sem a senha. */
 function toSelf(user: User): UserType {
-    const { Id, Name, Birth, Email, Provider, createdAt, updatedAt } = user.get({
-        plain: true,
-    });
-    return { Id, Name, Birth, Email, Provider, createdAt, updatedAt };
+    const { Uuid, Name, Birth, Email, Provider, createdAt, updatedAt } =
+        user.get({ plain: true });
+    return { Uuid, Name, Birth, Email, Provider, createdAt, updatedAt };
 }
 
 /** Perfil público de terceiros: só dados não sensíveis. */
 function toPublic(user: User): PublicUserType {
-    const { Id, Name, Provider } = user.get({ plain: true });
-    return { Id, Name, Provider };
+    const { Uuid, Name, Provider } = user.get({ plain: true });
+    return { Uuid, Name, Provider };
 }
 
 function toLoginResponse(user: User): LoginResponse {
     const profile = toSelf(user);
     return {
         message: 'Usuário logado com sucesso.',
-        token: signToken({ sub: profile.Id, email: profile.Email }),
+        token: signToken({
+            sub: user.Id,
+            uuid: profile.Uuid,
+            email: profile.Email,
+        }),
         data: {
-            Id: profile.Id,
+            Uuid: profile.Uuid,
             Name: profile.Name,
             Email: profile.Email,
         },
@@ -64,8 +67,8 @@ export class UserService implements IUserService {
         return users.map(toPublic);
     }
 
-    public async getById(id: number): Promise<PublicUserType> {
-        const user = await User.findByPk(id);
+    public async getByUuid(uuid: string): Promise<PublicUserType> {
+        const user = await User.findOne({ where: { Uuid: uuid } });
         if (!user) {
             throw new AppError('Usuário não encontrado.', StatusCodes.NOT_FOUND);
         }

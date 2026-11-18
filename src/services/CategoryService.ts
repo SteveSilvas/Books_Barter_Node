@@ -9,10 +9,10 @@ import { Category } from '../models';
 
 export interface ICategoryService {
     list(): Promise<CategoryType[]>;
-    getById(id: number): Promise<CategoryType>;
+    getByUuid(uuid: string): Promise<CategoryType>;
     create(data: CreateCategoryDTO): Promise<CategoryType>;
-    update(id: number, data: UpdateCategoryDTO): Promise<CategoryType>;
-    remove(id: number): Promise<void>;
+    update(uuid: string, data: UpdateCategoryDTO): Promise<CategoryType>;
+    remove(uuid: string): Promise<void>;
 }
 
 export class CategoryService implements ICategoryService {
@@ -21,8 +21,8 @@ export class CategoryService implements ICategoryService {
         return categories.map((category) => category.get({ plain: true }) as CategoryType);
     }
 
-    public async getById(id: number): Promise<CategoryType> {
-        const category = await Category.findByPk(id);
+    public async getByUuid(uuid: string): Promise<CategoryType> {
+        const category = await Category.findOne({ where: { Uuid: uuid } });
         if (!category) {
             throw new AppError('Categoria não encontrada.', StatusCodes.NOT_FOUND);
         }
@@ -34,8 +34,8 @@ export class CategoryService implements ICategoryService {
         return category.get({ plain: true }) as CategoryType;
     }
 
-    public async update(id: number, data: UpdateCategoryDTO): Promise<CategoryType> {
-        const category = await Category.findByPk(id);
+    public async update(uuid: string, data: UpdateCategoryDTO): Promise<CategoryType> {
+        const category = await Category.findOne({ where: { Uuid: uuid } });
         if (!category) {
             throw new AppError('Categoria não encontrada.', StatusCodes.NOT_FOUND);
         }
@@ -46,8 +46,8 @@ export class CategoryService implements ICategoryService {
         return category.get({ plain: true }) as CategoryType;
     }
 
-    public async remove(id: number): Promise<void> {
-        const category = await Category.findByPk(id);
+    public async remove(uuid: string): Promise<void> {
+        const category = await Category.findOne({ where: { Uuid: uuid } });
         if (!category) {
             throw new AppError('Categoria não encontrada.', StatusCodes.NOT_FOUND);
         }

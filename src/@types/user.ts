@@ -2,7 +2,7 @@ export type AuthProvider = 'local' | 'google';
 
 /** Perfil do próprio usuário (dono da conta) — nunca inclui a senha. */
 export interface UserType {
-    Id: number;
+    Uuid: string;
     Name: string;
     Birth: Date | null;
     Email: string;
@@ -13,7 +13,7 @@ export interface UserType {
 
 /** Perfil público de terceiros — expõe apenas dados não sensíveis. */
 export interface PublicUserType {
-    Id: number;
+    Uuid: string;
     Name: string;
     Provider: AuthProvider;
 }

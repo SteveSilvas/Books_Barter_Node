@@ -5,10 +5,11 @@ import { StatusCodes } from 'http-status-codes';
 
 export interface TokenPayload {
     sub: number;
+    uuid: string;
     email: string;
 }
 
-/** Assina um JWT com o id e o e-mail do usuário. */
+/** Assina um JWT com o id, o uuid e o e-mail do usuário. */
 export function signToken(payload: TokenPayload): string {
     const options: SignOptions = {
         expiresIn: env.auth.jwtExpiresIn as SignOptions['expiresIn'],
@@ -23,7 +24,11 @@ export function verifyToken(token: string): TokenPayload {
         if (typeof decoded === 'string') {
             throw new Error('payload inesperado');
         }
-        return { sub: Number(decoded.sub), email: String(decoded.email) };
+        return {
+            sub: Number(decoded.sub),
+            uuid: String(decoded.uuid),
+            email: String(decoded.email),
+        };
     } catch {
         throw new AppError('Token inválido ou expirado.', StatusCodes.UNAUTHORIZED);
     }

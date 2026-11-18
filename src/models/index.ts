@@ -2,6 +2,7 @@ import { sequelize } from '../database';
 import { Address } from './Address';
 import { Book } from './Book';
 import { BookCopy } from './BookCopy';
+import { BookStatus, BOOK_STATUS_SEED } from './BookStatus';
 import { Category } from './Category';
 import { User } from './User';
 
@@ -11,6 +12,17 @@ import { User } from './User';
  */
 export async function syncDatabase(): Promise<void> {
     await sequelize.sync();
+    await seedBookStatuses();
 }
 
-export { sequelize, Address, Book, BookCopy, Category, User };
+/** Insere os status de livro padrão, ignorando os que já existem. */
+export async function seedBookStatuses(): Promise<void> {
+    for (const status of BOOK_STATUS_SEED) {
+        await BookStatus.findOrCreate({
+            where: { Name: status.Name },
+            defaults: status,
+        });
+    }
+}
+
+export { sequelize, Address, Book, BookCopy, BookStatus, Category, User };

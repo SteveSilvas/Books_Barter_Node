@@ -15,12 +15,28 @@ beforeEach(async () => {
     ({ token } = await registerAndLogin(app));
 });
 
-async function createCategory(description = 'Romance'): Promise<number> {
+async function createCategory(description = 'Romance'): Promise<string> {
     const res = await request(app)
         .post('/categories')
         .set(bearer(token))
         .send({ Description: description });
-    return res.body.Id as number;
+    return res.body.Uuid as string;
+}
+
+async function createBook(
+    categoryUuid: string,
+    overrides: Partial<{ Title: string; Autor: string; Status: string }> = {},
+): Promise<string> {
+    const res = await request(app)
+        .post('/books')
+        .set(bearer(token))
+        .send({
+            Title: overrides.Title ?? 'Livro',
+            Autor: overrides.Autor ?? 'Autor',
+            CategoryUuid: categoryUuid,
+            Status: overrides.Status,
+        });
+    return res.body.Uuid as string;
 }
 
 describe('Category', () => {
@@ -31,6 +47,7 @@ describe('Category', () => {
             .send({ Description: 'Romance' });
         expect(res.status).toBe(201);
         expect(res.body).toMatchObject({ Description: 'Romance' });
+        expect(typeof res.body.Uuid).toBe('string');
     });
 
     it('responde 401 ao criar sem token', async () => {
@@ -40,18 +57,18 @@ describe('Category', () => {
         expect(res.status).toBe(401);
     });
 
-    it('lista, busca por id e atualiza', async () => {
-        const id = await createCategory();
+    it('lista, busca por uuid e atualiza', async () => {
+        const uuid = await createCategory();
 
         const list = await request(app).get('/categories');
         expect(list.status).toBe(200);
         expect(list.body).toHaveLength(1);
 
-        const byId = await request(app).get(`/categories/${id}`);
-        expect(byId.status).toBe(200);
+        const byUuid = await request(app).get(`/categories/${uuid}`);
+        expect(byUuid.status).toBe(200);
 
         const updated = await request(app)
-            .put(`/categories/${id}`)
+            .put(`/categories/${uuid}`)
             .set(bearer(token))
             .send({ Description: 'Romance BR' });
         expect(updated.status).toBe(200);
@@ -59,40 +76,46 @@ describe('Category', () => {
     });
 
     it('remove (204) e responde 404 depois', async () => {
-        const id = await createCategory();
+        const uuid = await createCategory();
         expect(
-            (await request(app).delete(`/categories/${id}`).set(bearer(token))).status,
+            (await request(app).delete(`/categories/${uuid}`).set(bearer(token))).status,
         ).toBe(204);
-        expect((await request(app).get(`/categories/${id}`)).status).toBe(404);
+        expect((await request(app).get(`/categories/${uuid}`)).status).toBe(404);
     });
 
-    it('responde 404 para id inexistente', async () => {
-        expect((await request(app).get('/categories/9999')).status).toBe(404);
+    it('responde 400 para uuid inválido e 404 para inexistente', async () => {
+        expect((await request(app).get('/categories/not-a-uuid')).status).toBe(400);
+        expect(
+            (await request(app).get('/categories/00000000-0000-4000-8000-000000000000'))
+                .status,
+        ).toBe(404);
     });
 });
 
-describe('Book', () => {
-    it('cria um livro vinculado a uma categoria (201)', async () => {
-        const categoryId = await createCategory();
+describe('Book (catálogo público)', () => {
+    it('cria um livro vinculado a uma categoria e ao dono (201)', async () => {
+        const categoryUuid = await createCategory();
         const res = await request(app)
             .post('/books')
             .set(bearer(token))
             .send({
                 Title: 'Dom Casmurro',
                 Autor: 'Machado de Assis',
-                CategoryId: categoryId,
+                CategoryUuid: categoryUuid,
             });
         expect(res.status).toBe(201);
-        expect(res.body).toMatchObject({
-            Title: 'Dom Casmurro',
-            CategoryId: categoryId,
-        });
+        expect(res.body.Title).toBe('Dom Casmurro');
+        expect(res.body.Category).toMatchObject({ Uuid: categoryUuid, Description: 'Romance' });
+        expect(res.body.Owner).toEqual({ Name: 'Usuário Teste' });
+        expect(res.body.Status).toMatchObject({ Name: 'available' });
+        expect(res.body.UserId).toBeUndefined();
+        expect(res.body.Id).toBeUndefined();
     });
 
     it('responde 401 ao criar sem token', async () => {
         const res = await request(app)
             .post('/books')
-            .send({ Title: 'X', Autor: 'Y', CategoryId: 1 });
+            .send({ Title: 'X', Autor: 'Y', CategoryUuid: '00000000-0000-4000-8000-000000000000' });
         expect(res.status).toBe(401);
     });
 
@@ -103,28 +126,21 @@ describe('Book', () => {
             .send({
                 Title: 'X',
                 Autor: 'Y',
-                CategoryId: 9999,
+                CategoryUuid: '00000000-0000-4000-8000-000000000000',
             });
         expect(res.status).toBe(404);
     });
 
-    it('lista com a categoria incluída e atualiza parcialmente', async () => {
-        const categoryId = await createCategory();
-        const created = await request(app)
-            .post('/books')
-            .set(bearer(token))
-            .send({
-                Title: 'Livro',
-                Autor: 'Autor',
-                CategoryId: categoryId,
-            });
+    it('lista publicamente e atualiza parcialmente (dono)', async () => {
+        const categoryUuid = await createCategory();
+        const uuid = await createBook(categoryUuid, { Title: 'Livro' });
 
         const list = await request(app).get('/books');
         expect(list.status).toBe(200);
         expect(list.body[0].Category).toMatchObject({ Description: 'Romance' });
 
         const updated = await request(app)
-            .put(`/books/${created.body.Id}`)
+            .put(`/books/${uuid}`)
             .set(bearer(token))
             .send({ Title: 'Livro 2' });
         expect(updated.status).toBe(200);
@@ -132,20 +148,85 @@ describe('Book', () => {
         expect(updated.body.Autor).toBe('Autor');
     });
 
-    it('remove (204)', async () => {
-        const categoryId = await createCategory();
-        const created = await request(app)
+    it('pesquisa o catálogo público por título (parcial)', async () => {
+        const categoryUuid = await createCategory();
+        await createBook(categoryUuid, { Title: 'Dom Casmurro' });
+        await createBook(categoryUuid, { Title: 'Memórias Póstumas' });
+
+        const res = await request(app).get('/books').query({ title: 'casmurro' });
+        expect(res.status).toBe(200);
+        expect(res.body).toHaveLength(1);
+        expect(res.body[0].Title).toBe('Dom Casmurro');
+    });
+
+    it('responde 403 ao editar ou remover livro de outro usuário', async () => {
+        const categoryUuid = await createCategory();
+        const uuid = await createBook(categoryUuid);
+        const other = await registerAndLogin(app);
+
+        const edit = await request(app)
+            .put(`/books/${uuid}`)
+            .set(bearer(other.token))
+            .send({ Title: 'Invadido' });
+        expect(edit.status).toBe(403);
+
+        const del = await request(app)
+            .delete(`/books/${uuid}`)
+            .set(bearer(other.token));
+        expect(del.status).toBe(403);
+    });
+
+    it('remove (204) o próprio livro', async () => {
+        const categoryUuid = await createCategory();
+        const uuid = await createBook(categoryUuid);
+        expect(
+            (await request(app).delete(`/books/${uuid}`).set(bearer(token))).status,
+        ).toBe(204);
+    });
+
+    it('aceita status inicial e troca para reserved', async () => {
+        const categoryUuid = await createCategory();
+        const uuid = await createBook(categoryUuid, { Status: 'reserved' });
+        const detail = await request(app).get(`/books/${uuid}`);
+        expect(detail.body.Status.Name).toBe('reserved');
+
+        const updated = await request(app)
+            .put(`/books/${uuid}`)
+            .set(bearer(token))
+            .send({ Status: 'traded' });
+        expect(updated.body.Status.Name).toBe('traded');
+    });
+
+    it('responde 400 para status inexistente', async () => {
+        const categoryUuid = await createCategory();
+        const res = await request(app)
             .post('/books')
             .set(bearer(token))
-            .send({
-                Title: 'Livro',
-                Autor: 'Autor',
-                CategoryId: categoryId,
-            });
-        expect(
-            (await request(app).delete(`/books/${created.body.Id}`).set(bearer(token)))
-                .status,
-        ).toBe(204);
+            .send({ Title: 'X', Autor: 'Y', CategoryUuid: categoryUuid, Status: 'inexistente' });
+        expect(res.status).toBe(400);
+    });
+});
+
+describe('Estante pessoal (GET /users/me/books)', () => {
+    it('lista apenas os livros do próprio usuário', async () => {
+        const categoryUuid = await createCategory();
+        await createBook(categoryUuid, { Title: 'Meu livro' });
+
+        const other = await registerAndLogin(app);
+        await request(app)
+            .post('/books')
+            .set(bearer(other.token))
+            .send({ Title: 'Livro do outro', Autor: 'Z', CategoryUuid: categoryUuid });
+
+        const mine = await request(app).get('/users/me/books').set(bearer(token));
+        expect(mine.status).toBe(200);
+        expect(mine.body).toHaveLength(1);
+        expect(mine.body[0].Title).toBe('Meu livro');
+    });
+
+    it('responde 401 sem token (estante é privada)', async () => {
+        const res = await request(app).get('/users/me/books');
+        expect(res.status).toBe(401);
     });
 });
 
@@ -164,22 +245,22 @@ describe('BookCopy', () => {
             .set(bearer(token))
             .send(payload);
         expect(created.status).toBe(201);
-        const id = created.body.Id;
+        const uuid = created.body.Uuid;
 
         expect((await request(app).get('/book-copies')).status).toBe(200);
-        expect((await request(app).get(`/book-copies/${id}`)).status).toBe(200);
+        expect((await request(app).get(`/book-copies/${uuid}`)).status).toBe(200);
 
         const updated = await request(app)
-            .put(`/book-copies/${id}`)
+            .put(`/book-copies/${uuid}`)
             .set(bearer(token))
             .send({ Editora: 'Nova Editora' });
         expect(updated.status).toBe(200);
         expect(updated.body.Editora).toBe('Nova Editora');
 
         expect(
-            (await request(app).delete(`/book-copies/${id}`).set(bearer(token))).status,
+            (await request(app).delete(`/book-copies/${uuid}`).set(bearer(token))).status,
         ).toBe(204);
-        expect((await request(app).get(`/book-copies/${id}`)).status).toBe(404);
+        expect((await request(app).get(`/book-copies/${uuid}`)).status).toBe(404);
     });
 });
 
@@ -201,12 +282,12 @@ describe('Address', () => {
             .set(bearer(token))
             .send(payload);
         expect(created.status).toBe(201);
-        const id = created.body.Id;
+        const uuid = created.body.Uuid;
 
         expect((await request(app).get('/addresses')).status).toBe(200);
 
         const updated = await request(app)
-            .put(`/addresses/${id}`)
+            .put(`/addresses/${uuid}`)
             .set(bearer(token))
             .send({ Cidade: 'Campinas' });
         expect(updated.status).toBe(200);
@@ -214,8 +295,8 @@ describe('Address', () => {
         expect(updated.body.Estado).toBe('SP');
 
         expect(
-            (await request(app).delete(`/addresses/${id}`).set(bearer(token))).status,
+            (await request(app).delete(`/addresses/${uuid}`).set(bearer(token))).status,
         ).toBe(204);
-        expect((await request(app).get(`/addresses/${id}`)).status).toBe(404);
+        expect((await request(app).get(`/addresses/${uuid}`)).status).toBe(404);
     });
 });

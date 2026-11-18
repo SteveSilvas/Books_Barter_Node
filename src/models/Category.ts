@@ -12,6 +12,7 @@ export class Category extends Model<
     InferCreationAttributes<Category>
 > {
     declare Id: CreationOptional<number>;
+    declare Uuid: CreationOptional<string>;
     declare Description: string;
     declare createdAt: CreationOptional<Date>;
     declare updatedAt: CreationOptional<Date>;
@@ -24,6 +25,12 @@ Category.init(
             autoIncrement: true,
             allowNull: false,
             primaryKey: true,
+        },
+        Uuid: {
+            type: DataTypes.UUID,
+            allowNull: false,
+            unique: true,
+            defaultValue: DataTypes.UUIDV4,
         },
         Description: {
             type: DataTypes.STRING,

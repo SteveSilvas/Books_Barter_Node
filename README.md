@@ -48,9 +48,9 @@ já foi entregue e do que ainda precisa ser desenvolvido.
 | # | Regra de negócio | Status | O que existe no código hoje |
 |---|------------------|--------|------------------------------|
 | 1 | Acesso autenticado | ✅ Implementado | Cadastro (`POST /users`), login por e-mail/senha (`POST /users/login`) e login com Google (`POST /users/google`). Senhas com **hash (bcrypt)**, sessão por **JWT** (`Authorization: Bearer <token>`) e rotas de escrita protegidas pelo middleware `authenticate`. |
-| 2 | Ver e editar perfil | ✅ Implementado | `GET /users/me` (perfil próprio) e `PUT /users/me` (edição parcial com validação de nome/e-mail/data). Troca de senha exige a senha atual. `PUT/DELETE /users/:id` só permitem o **próprio** usuário (403 caso contrário). Perfis de terceiros são públicos **sem e-mail**. |
-| 3 | Estante digital pública | 🟡 Parcial | Cadastro e listagem de livros (`/books`). **Falta** o vínculo `Book → User` (não há noção de "dono" da estante). |
-| 4 | Visibilidade da estante de outros | 🔴 Pendente | Existe listagem geral de livros, mas **sem filtro por usuário/estante**. |
+| 2 | Ver e editar perfil | ✅ Implementado | `GET /users/me` (perfil próprio) e `PUT /users/me` (edição parcial com validação de nome/e-mail/data). Troca de senha exige a senha atual. `PUT/DELETE /users/:uuid` só permitem o **próprio** usuário (403 caso contrário). Perfis de terceiros são públicos **sem e-mail**. |
+| 3 | Estante digital | ✅ Implementado | Cada livro tem dono (`Book.UserId`) e status. **Estante pessoal privada** em `GET /users/me/books` (só o dono) e **catálogo público** em `GET /books?title=` (ver e pesquisar). CRUD do livro restrito ao dono (403 caso contrário). |
+| 4 | Visibilidade da estante de outros | 🟡 Parcial | Catálogo público com busca por título e `Owner.Name` no livro. **Falta** paginação, ordenação e filtros por status/categoria. |
 | 5 | Seguir / deixar de seguir | 🔴 Pendente | Não implementado (sem entidade de relacionamento entre usuários). |
 | 6 | Favoritar / desfavoritar | 🔴 Pendente | Não implementado (sem entidade de favoritos). |
 | 7 | Chat de negociação | 🔴 Pendente | Não implementado (sem entidades de conversa/mensagem). |
@@ -216,20 +216,21 @@ Rotas marcadas com 🔒 exigem autenticação (`Authorization: Bearer <token>`).
 | GET 🔒 | `/users/me` | Perfil **completo** do usuário autenticado | — |
 | PUT 🔒 | `/users/me` | Edita o próprio perfil (parcial) | `{ Name?, Birth?, Email?, Pass?, CurrentPass? }` |
 | GET | `/users` | Lista perfis públicos (sem e-mail) | — |
-| GET | `/users/:id` | Perfil público por id (sem e-mail) | — |
+| GET | `/users/:uuid` | Perfil público por UUID (sem e-mail) | — |
 | GET | `/users/email/:email` | Perfil público por e-mail (sem e-mail) | — |
-| PUT 🔒 | `/users/:id` | Atualiza **o próprio** perfil (parcial; 403 se for de outro) | `{ Name?, Birth?, Email?, Pass?, CurrentPass? }` |
-| DELETE 🔒 | `/users/:id` | Remove **o próprio** usuário (403 se for outro) | — |
+| PUT 🔒 | `/users/:uuid` | Atualiza **o próprio** perfil (parcial; 403 se for de outro) | `{ Name?, Birth?, Email?, Pass?, CurrentPass? }` |
+| DELETE 🔒 | `/users/:uuid` | Remove **o próprio** usuário (403 se for outro) | — |
 
 ### Livros
 
 | Método | Rota | Descrição | Corpo |
 |--------|------|-----------|-------|
-| GET | `/books` | Lista livros (ordem decrescente por id, com a categoria) | — |
-| POST 🔒 | `/books` | Cadastra um livro | `{ Title, Autor, CategoryId, CreationDate?, CreationLocality? }` |
-| GET | `/books/:id` | Busca livro por id | — |
-| PUT 🔒 | `/books/:id` | Atualiza um livro | `{ Title?, Autor?, CategoryId?, CreationDate?, CreationLocality? }` |
-| DELETE 🔒 | `/books/:id` | Remove um livro | — |
+| GET | `/books` | Catálogo público; busca por título com `?title=` | — |
+| GET | `/books/:uuid` | Detalhe público de um livro | — |
+| GET 🔒 | `/users/me/books` | Estante **pessoal** do usuário autenticado (só o dono) | — |
+| POST 🔒 | `/books` | Cadastra um livro (dono = usuário do token) | `{ Title, Autor, CategoryUuid, Status?, CreationDate?, CreationLocality? }` |
+| PUT 🔒 | `/books/:uuid` | Atualiza um livro (**só o dono**; 403 se for de outro) | `{ Title?, Autor?, CategoryUuid?, Status?, CreationDate?, CreationLocality? }` |
+| DELETE 🔒 | `/books/:uuid` | Remove um livro (**só o dono**; 403 se for de outro) | — |
 
 ### Categorias
 
@@ -237,9 +238,9 @@ Rotas marcadas com 🔒 exigem autenticação (`Authorization: Bearer <token>`).
 |--------|------|-----------|-------|
 | GET | `/categories` | Lista categorias | — |
 | POST 🔒 | `/categories` | Cadastra uma categoria | `{ Description }` |
-| GET | `/categories/:id` | Busca categoria por id | — |
-| PUT 🔒 | `/categories/:id` | Atualiza uma categoria | `{ Description? }` |
-| DELETE 🔒 | `/categories/:id` | Remove uma categoria | — |
+| GET | `/categories/:uuid` | Busca categoria por UUID | — |
+| PUT 🔒 | `/categories/:uuid` | Atualiza uma categoria | `{ Description? }` |
+| DELETE 🔒 | `/categories/:uuid` | Remove uma categoria | — |
 
 ### Exemplares de livros (BookCopy)
 
@@ -247,9 +248,9 @@ Rotas marcadas com 🔒 exigem autenticação (`Authorization: Bearer <token>`).
 |--------|------|-----------|-------|
 | GET | `/book-copies` | Lista exemplares | — |
 | POST 🔒 | `/book-copies` | Cadastra um exemplar | `{ ISBN?, Editora, TypePrint, PublicationDate, PublicationLocality? }` |
-| GET | `/book-copies/:id` | Busca exemplar por id | — |
-| PUT 🔒 | `/book-copies/:id` | Atualiza um exemplar | `{ ISBN?, Editora?, TypePrint?, PublicationDate?, PublicationLocality? }` |
-| DELETE 🔒 | `/book-copies/:id` | Remove um exemplar | — |
+| GET | `/book-copies/:uuid` | Busca exemplar por UUID | — |
+| PUT 🔒 | `/book-copies/:uuid` | Atualiza um exemplar | `{ ISBN?, Editora?, TypePrint?, PublicationDate?, PublicationLocality? }` |
+| DELETE 🔒 | `/book-copies/:uuid` | Remove um exemplar | — |
 
 ### Endereços
 
@@ -257,9 +258,9 @@ Rotas marcadas com 🔒 exigem autenticação (`Authorization: Bearer <token>`).
 |--------|------|-----------|-------|
 | GET | `/addresses` | Lista endereços | — |
 | POST 🔒 | `/addresses` | Cadastra um endereço | `{ Rua, Numero, Complemento, Bairro, Cep, Cidade, Estado, Pais }` |
-| GET | `/addresses/:id` | Busca endereço por id | — |
-| PUT 🔒 | `/addresses/:id` | Atualiza um endereço | campos parciais do endereço |
-| DELETE 🔒 | `/addresses/:id` | Remove um endereço | — |
+| GET | `/addresses/:uuid` | Busca endereço por UUID | — |
+| PUT 🔒 | `/addresses/:uuid` | Atualiza um endereço | campos parciais do endereço |
+| DELETE 🔒 | `/addresses/:uuid` | Remove um endereço | — |
 
 ### Autenticação (Regra 1)
 
@@ -287,15 +288,15 @@ curl http://localhost:3000/users/me -H "Authorization: Bearer <jwt>"
 
 O perfil tem duas visões: **a própria** (completa) e a **pública** (de terceiros).
 
-* **`GET /users/me`** (🔒) devolve `{ Id, Name, Birth, Email, Provider, createdAt, updatedAt }`.
-* **`GET /users`, `/users/:id`, `/users/email/:email`** devolvem apenas `{ Id, Name, Provider }`
+* **`GET /users/me`** (🔒) devolve `{ Uuid, Name, Birth, Email, Provider, createdAt, updatedAt }`.
+* **`GET /users`, `/users/:uuid`, `/users/email/:email`** devolvem apenas `{ Uuid, Name, Provider }`
   — **sem e-mail** de terceiros.
 * **`PUT /users/me`** (🔒) edita o próprio perfil (parcial). Campos são validados: `Name` não vazio,
   `Email` com formato válido (normalizado em minúsculas), `Birth` como data válida (ou `null` para
   limpar).
 * **Troca de senha:** enviar `Pass` exige `CurrentPass` (a senha atual). Contas `google` não têm
   senha local e não podem trocá-la por aqui (`403`).
-* **Posse:** `PUT /users/:id` e `DELETE /users/:id` só funcionam para o **próprio** `:id`;
+* **Posse:** `PUT /users/:uuid` e `DELETE /users/:uuid` só funcionam para o **próprio** `:uuid`;
   qualquer outro retorna `403`.
 
 ```bash
@@ -308,6 +309,38 @@ curl -X PUT http://localhost:3000/users/me \
 curl -X PUT http://localhost:3000/users/me \
   -H "Authorization: Bearer <jwt>" -H 'Content-Type: application/json' \
   -d '{"Pass":"novaSenha","CurrentPass":"secret"}'
+```
+
+### Estante e catálogo de livros (Regra 3)
+
+Cada livro pertence a um **dono** (`Book.UserId`, definido pelo token na criação) e tem um **status**
+(`available`, `reserved` ou `traded`). A resposta pública de um livro **não expõe `UserId` nem o
+`Id` interno**: o dono aparece apenas como `Owner: { Name }` e as rotas usam `Uuid`.
+
+* **Estante pessoal (privada):** `GET /users/me/books` (🔒) lista os livros do usuário autenticado.
+* **Catálogo público:** `GET /books` e `GET /books/:uuid` (sem token), com busca parcial por título
+  via `GET /books?title=<termo>`.
+* **CRUD restrito ao dono:** `POST /books` (dono = token), `PUT /books/:uuid` e `DELETE /books/:uuid`
+  — qualquer outro usuário autenticado recebe `403`.
+* **Corpo do livro:** `{ Title, Autor, CategoryUuid, Status?, CreationDate?, CreationLocality? }`.
+  `Status` é o nome (`available` por padrão); um status inexistente retorna `400`.
+
+```bash
+# estante do próprio usuário
+curl http://localhost:3000/users/me/books -H "Authorization: Bearer <jwt>"
+
+# catálogo público com busca por título
+curl "http://localhost:3000/books?title=casmurro"
+
+# cadastrar um livro na própria estante
+curl -X POST http://localhost:3000/books \
+  -H "Authorization: Bearer <jwt>" -H 'Content-Type: application/json' \
+  -d '{"Title":"Dom Casmurro","Autor":"Machado de Assis","CategoryUuid":"<uuid-da-categoria>"}'
+
+# marcar como reservado para troca
+curl -X PUT http://localhost:3000/books/<uuid-do-livro> \
+  -H "Authorization: Bearer <jwt>" -H 'Content-Type: application/json' \
+  -d '{"Status":"reserved"}'
 ```
 
 ### Formato de erro
@@ -324,11 +357,15 @@ Erros retornam o status HTTP adequado e um corpo padronizado:
 
 Definidos em `src/models/` como classes Sequelize tipadas:
 
-* **User:** `Id`, `Name`, `Birth` (opcional), `Email` (único), `Pass` (hash bcrypt; nulo em contas Google), `Provider` (`local`/`google`)
-* **Book:** `Id`, `Title`, `Autor`, `CreationDate`, `CreationLocality`, `CategoryId` (`belongsTo` Category)
-* **Category:** `Id`, `Description`
-* **BookCopy:** `Id`, `ISBN`, `Editora`, `TypePrint`, `PublicationDate`, `PublicationLocality`
-* **Address:** `Id`, `Rua`, `Numero`, `Complemento`, `Bairro`, `Cep`, `Cidade`, `Estado`, `Pais`
+Todos os models têm `Id` (inteiro, chave primária, para indexação) e **`Uuid`** (GUID, único) — as
+rotas usam sempre o `Uuid`; o `Id` fica apenas como constraint/chave interna.
+
+* **User:** `Uuid`, `Name`, `Birth` (opcional), `Email` (único), `Pass` (hash bcrypt; nulo em contas Google), `Provider` (`local`/`google`)
+* **Book:** `Uuid`, `Title`, `Autor`, `CreationDate`, `CreationLocality`, `CategoryId` (`belongsTo` Category), `UserId` (`belongsTo` User — dono), `StatusId` (`belongsTo` BookStatus)
+* **BookStatus:** `Uuid`, `Name` (`available`/`reserved`/`traded`, único), `Description` — semeado na inicialização
+* **Category:** `Uuid`, `Description`
+* **BookCopy:** `Uuid`, `ISBN`, `Editora`, `TypePrint`, `PublicationDate`, `PublicationLocality`
+* **Address:** `Uuid`, `Rua`, `Numero`, `Complemento`, `Bairro`, `Cep`, `Cidade`, `Estado`, `Pais`
 
 Na inicialização (`src/index.ts`), a aplicação chama `sequelize.authenticate()` e `sequelize.sync()`,
 criando/atualizando todas as tabelas automaticamente.
@@ -428,13 +465,16 @@ executá-los.
 npm test
 ```
 
-Cobertura atual (48 casos): criação/listagem/busca/atualização/remoção de usuários, login válido e
+Cobertura atual (54 casos): criação/listagem/busca/atualização/remoção de usuários, login válido e
 inválido, senha com hash (não em texto puro), **token JWT** e rotas protegidas (401 sem token/token
 inválido), **perfil próprio vs. público** (e-mail oculto de terceiros), edição de perfil com
 validação (nome/e-mail/data), **troca de senha** (senha atual obrigatória), **posse do recurso**
-(403 ao editar/remover outro usuário), login Google (400 sem `idToken`, 401 com `idToken` inválido),
-e-mail duplicado, id inválido, recurso e rota inexistentes, e o ciclo CRUD completo de `books`,
-`categories`, `book-copies` e `addresses` — verificando os status HTTP esperados
+(403 ao editar/remover outro usuário ou livro alheio), login Google (400 sem `idToken`, 401 com
+`idToken` inválido), **estante pessoal privada** (`/users/me/books`, 401 sem token), **catálogo
+público com busca por título** e sem vazamento de `UserId`, **status do livro** (default `available`,
+troca para `reserved`/`traded`, 400 para inexistente), `Uuid` inválido (400) e inexistente (404),
+e-mail duplicado, recurso e rota inexistentes, e o ciclo CRUD completo de `books`, `categories`,
+`book-copies` e `addresses` — verificando os status HTTP esperados
 (`200`, `201`, `204`, `400`, `401`, `403`, `404`, `409`).
 
 Estrutura:
@@ -445,8 +485,8 @@ tests/
 ├── helpers
 │   ├── app.ts          # Cria o app Express com banco sincronizado/limpo
 │   └── auth.ts         # Cadastra/loga e devolve o token para requisições autenticadas
-├── users.test.ts       # Usuários, autenticação, login, erros e 404
-└── resources.test.ts   # Books, Categories, BookCopies, Addresses
+├── users.test.ts       # Usuários, autenticação, login, posse e erros
+└── resources.test.ts   # Books (catálogo, estante, posse, status), Categories, BookCopies, Addresses
 ```
 
 Para checar os tipos dos testes:
@@ -466,9 +506,10 @@ A plataforma incentiva boas práticas para a segurança da comunidade:
 
 ### Limitações conhecidas
 
-* As rotas de **leitura** de perfis/livros ainda são públicas; a leitura de perfil de terceiros já
-  oculta o e-mail, mas não há níveis de privacidade configuráveis pelo usuário.
-* Não há **papel de administrador**: a posse (`authorizeSelf`) é a única regra de autorização.
+* O **catálogo** de livros é público por design; a **estante pessoal** (`/users/me/books`) é privada,
+  mas ainda não há níveis de privacidade configuráveis pelo usuário.
+* Não há **papel de administrador**: a posse (dono do perfil/livro) é a única regra de autorização.
+* A listagem do catálogo não tem **paginação** nem ordenação configurável (previsto para a Regra 4).
 * Não há **refresh token** nem revogação de JWT: o token expira conforme `JWT_EXPIRES_IN`.
 * O login com Google valida o ID token no backend; não há fluxo OAuth interativo (redirect) — o
   cliente obtém o ID token (Google Identity Services) e o envia à API.

@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { CreateCategoryDTO, UpdateCategoryDTO } from '../@types/category';
 import { categoryService } from '../services/CategoryService';
-import { parseId } from '../utils/parseId';
+import { parseUuid } from '../utils/parseId';
 
 export class CategoryController {
     public async list(req: Request, res: Response): Promise<Response> {
@@ -10,9 +10,9 @@ export class CategoryController {
         return res.status(StatusCodes.OK).json(categories);
     }
 
-    public async getById(req: Request, res: Response): Promise<Response> {
-        const id = parseId(req.params.id);
-        const category = await categoryService.getById(id);
+    public async getByUuid(req: Request, res: Response): Promise<Response> {
+        const uuid = parseUuid(req.params.uuid);
+        const category = await categoryService.getByUuid(uuid);
         return res.status(StatusCodes.OK).json(category);
     }
 
@@ -23,15 +23,15 @@ export class CategoryController {
     }
 
     public async update(req: Request, res: Response): Promise<Response> {
-        const id = parseId(req.params.id);
+        const uuid = parseUuid(req.params.uuid);
         const data: UpdateCategoryDTO = { Description: req.body.Description };
-        const category = await categoryService.update(id, data);
+        const category = await categoryService.update(uuid, data);
         return res.status(StatusCodes.OK).json(category);
     }
 
     public async remove(req: Request, res: Response): Promise<Response> {
-        const id = parseId(req.params.id);
-        await categoryService.remove(id);
+        const uuid = parseUuid(req.params.uuid);
+        await categoryService.remove(uuid);
         return res.status(StatusCodes.NO_CONTENT).send();
     }
 }

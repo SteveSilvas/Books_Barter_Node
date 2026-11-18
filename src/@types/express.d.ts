@@ -2,6 +2,7 @@ import 'express';
 
 export interface AuthUser {
     Id: number;
+    Uuid: string;
     Email: string;
 }
 

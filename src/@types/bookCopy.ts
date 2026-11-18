@@ -1,5 +1,5 @@
 export interface BookCopyType {
-    Id: number;
+    Uuid: string;
     ISBN?: string | null;
     Editora: string;
     TypePrint: string;

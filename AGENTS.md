@@ -36,8 +36,8 @@ src/
   config/env.ts   leitura/validação de env (DB_NAME, DB_USER, DB_HOST obrigatórios no mysql; PORT padrão 3000; sqlite dispensa credenciais)
   database/       instância do Sequelize (mysql ou sqlite)
   errors/         AppError (message + statusCode)
-  middlewares/    asyncHandler, errorHandler, notFoundHandler, authenticate (JWT), authorizeSelf (posse)
-  utils/          parseId/parseParam, validation (nome/e-mail/data/senha), password (bcrypt), jwt (sign/verify), googleAuth (ID token)
+  middlewares/    asyncHandler, errorHandler, notFoundHandler, authenticate (JWT), authorizeSelf (posse de perfil)
+  utils/          parseId/parseParam/parseUuid, validation (nome/e-mail/data/senha), password (bcrypt), jwt (sign/verify), googleAuth (ID token)
   @types/         DTOs por recurso (user, auth, book, category, bookCopy, address) + express.d.ts (req.user)
   models/         classes Sequelize tipadas (InferAttributes/InferCreationAttributes)
   services/       regras de negócio; lançam AppError; exportam singleton (ex.: userService)
@@ -57,10 +57,21 @@ tests/            Jest + Supertest (setup-env.ts, helpers/app.ts, helpers/auth.t
 
 ## Perfil (Regra 2)
 
-- Duas visões: `toSelf` (próprio, completo) e `toPublic` (`{ Id, Name, Provider }`, sem e-mail).
-- `GET/PUT /users/me` operam sobre o id do token; `PUT/DELETE /users/:id` passam por `authorizeSelf` (403).
+- Duas visões: `toSelf` (próprio, completo) e `toPublic` (`{ Uuid, Name, Provider }`, sem e-mail).
+- `GET/PUT /users/me` operam sobre o id do token; `PUT/DELETE /users/:uuid` passam por `authorizeSelf` (403).
 - `update` valida via `utils/validation` (nome não vazio, e-mail normalizado, data válida) e troca de
   senha exige `CurrentPass`; contas `google` não trocam senha local (403).
+
+## Estante e catálogo (Regra 3)
+
+- Todo model tem `Id` (PK inteira, indexação) e **`Uuid`** (GUID, único); **as rotas usam `:uuid`**.
+- `Book` tem `UserId` (não nulo, dono) e `StatusId` → `BookStatus` (`available`/`reserved`/`traded`,
+  semeado em `seedBookStatuses()` chamado por `syncDatabase()`).
+- `BookService.toPublic` **não expõe `UserId` nem `Id`**: devolve `Owner: { Name }`, `Category.Uuid` e `Status`.
+- Estante pessoal **privada**: `GET /users/me/books` (dono = `req.user.Id`).
+- Catálogo **público**: `GET /books?title=` (LIKE parcial) e `GET /books/:uuid`.
+- CRUD do livro restrito ao dono: `BookService` checa `book.UserId !== userId` → 403.
+- `POST/PUT /books` usam `CategoryUuid` e `Status` (nome); status inexistente → 400.
 
 ## Testes
 
@@ -76,11 +87,11 @@ tests/            Jest + Supertest (setup-env.ts, helpers/app.ts, helpers/auth.t
 - Regras de negócio só em services; controllers não têm regra.
 - Erros de domínio: `throw new AppError(msg, StatusCodes.X)`.
 - Handlers de rota sempre envolvidos por `asyncHandler`.
-- Status HTTP: 200 leitura/update, 201 create, 204 delete, 400 id inválido,
-  401 credenciais, 404 recurso/rota, 409 e-mail duplicado, 500 inesperado.
+- Status HTTP: 200 leitura/update, 201 create, 204 delete, 400 uuid inválido/status inválido,
+  401 credenciais, 403 recurso de outro usuário, 404 recurso/rota, 409 e-mail duplicado, 500 inesperado.
 - Respostas de erro: `{ "status": <code>, "message": <texto> }`.
 - Rotas RESTful: plural (`/users`, `/books`, `/categories`, `/book-copies`, `/addresses`);
-  update/delete por `/:id` com verbo HTTP, não por sufixo (`/update`, `/delete`).
+  update/delete por `/:uuid` com verbo HTTP, não por sufixo (`/update`, `/delete`).
 
 ## Banco
 
@@ -88,7 +99,7 @@ tests/            Jest + Supertest (setup-env.ts, helpers/app.ts, helpers/auth.t
 `src/models/`; o banco é derivado do código (nunca o contrário). Evoluções de schema começam sempre
 por uma alteração no model + associação.
 
-Nomes de tabela preservados: `Users`, `Categories`, `Books`, `BookCopies`, `Addresses`.
+Nomes de tabela: `Users`, `Categories`, `Books`, `BookStatuses`, `BookCopies`, `Addresses`.
 `sequelize.sync()` na inicialização cria/atualiza todas as tabelas (dev/teste). Para produção,
 migrações versionadas **geradas a partir dos models** — ver `ROADMAP.md`.
 

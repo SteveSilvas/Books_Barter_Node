@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { CreateBookCopyDTO, UpdateBookCopyDTO } from '../@types/bookCopy';
 import { bookCopyService } from '../services/BookCopyService';
-import { parseId } from '../utils/parseId';
+import { parseUuid } from '../utils/parseId';
 
 export class BookCopyController {
     public async list(req: Request, res: Response): Promise<Response> {
@@ -10,9 +10,9 @@ export class BookCopyController {
         return res.status(StatusCodes.OK).json(copies);
     }
 
-    public async getById(req: Request, res: Response): Promise<Response> {
-        const id = parseId(req.params.id);
-        const copy = await bookCopyService.getById(id);
+    public async getByUuid(req: Request, res: Response): Promise<Response> {
+        const uuid = parseUuid(req.params.uuid);
+        const copy = await bookCopyService.getByUuid(uuid);
         return res.status(StatusCodes.OK).json(copy);
     }
 
@@ -29,7 +29,7 @@ export class BookCopyController {
     }
 
     public async update(req: Request, res: Response): Promise<Response> {
-        const id = parseId(req.params.id);
+        const uuid = parseUuid(req.params.uuid);
         const data: UpdateBookCopyDTO = {
             ISBN: req.body.ISBN,
             Editora: req.body.Editora,
@@ -37,13 +37,13 @@ export class BookCopyController {
             PublicationDate: req.body.PublicationDate,
             PublicationLocality: req.body.PublicationLocality,
         };
-        const copy = await bookCopyService.update(id, data);
+        const copy = await bookCopyService.update(uuid, data);
         return res.status(StatusCodes.OK).json(copy);
     }
 
     public async remove(req: Request, res: Response): Promise<Response> {
-        const id = parseId(req.params.id);
-        await bookCopyService.remove(id);
+        const uuid = parseUuid(req.params.uuid);
+        await bookCopyService.remove(uuid);
         return res.status(StatusCodes.NO_CONTENT).send();
     }
 }

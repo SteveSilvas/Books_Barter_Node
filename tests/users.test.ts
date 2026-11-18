@@ -33,7 +33,7 @@ describe('POST /users', () => {
         const res = await request(app).post('/users').send(validUser);
         expect(res.status).toBe(201);
         expect(res.body).toMatchObject({
-            Id: expect.any(Number),
+            Uuid: expect.any(String),
             Name: 'Ana',
             Email: 'ana@example.com',
         });
@@ -74,22 +74,22 @@ describe('GET /users', () => {
     });
 });
 
-describe('GET /users/:id', () => {
+describe('GET /users/:uuid', () => {
     it('retorna o perfil público (sem e-mail) pelo id', async () => {
         const created = await request(app).post('/users').send(validUser);
-        const res = await request(app).get(`/users/${created.body.Id}`);
+        const res = await request(app).get(`/users/${created.body.Uuid}`);
         expect(res.status).toBe(200);
         expect(res.body).toMatchObject({ Name: 'Ana', Provider: 'local' });
         expect(res.body.Email).toBeUndefined();
     });
 
     it('responde 404 para id inexistente', async () => {
-        const res = await request(app).get('/users/9999');
+        const res = await request(app).get('/users/00000000-0000-4000-8000-000000000000');
         expect(res.status).toBe(404);
     });
 
     it('responde 400 para id não numérico', async () => {
-        const res = await request(app).get('/users/abc');
+        const res = await request(app).get('/users/nao-e-uuid');
         expect(res.status).toBe(400);
     });
 });
@@ -260,11 +260,11 @@ describe('POST /users/google', () => {
     });
 });
 
-describe('PUT /users/:id (posse do recurso)', () => {
+describe('PUT /users/:uuid (posse do recurso)', () => {
     it('atualiza o próprio perfil pelo id (200)', async () => {
-        const { token, Id } = await registerAndLogin(app, validUser);
+        const { token, Uuid } = await registerAndLogin(app, validUser);
         const res = await request(app)
-            .put(`/users/${Id}`)
+            .put(`/users/${Uuid}`)
             .set(bearer(token))
             .send({ Name: 'Ana Maria' });
         expect(res.status).toBe(200);
@@ -275,7 +275,7 @@ describe('PUT /users/:id (posse do recurso)', () => {
         const { token } = await registerAndLogin(app, validUser);
         const other = await registerAndLogin(app, { Email: 'bob@example.com' });
         const res = await request(app)
-            .put(`/users/${other.Id}`)
+            .put(`/users/${other.Uuid}`)
             .set(bearer(token))
             .send({ Name: 'Invasor' });
         expect(res.status).toBe(403);
@@ -284,28 +284,28 @@ describe('PUT /users/:id (posse do recurso)', () => {
     it('responde 401 sem token', async () => {
         const created = await request(app).post('/users').send(validUser);
         const res = await request(app)
-            .put(`/users/${created.body.Id}`)
+            .put(`/users/${created.body.Uuid}`)
             .send({ Name: 'X' });
         expect(res.status).toBe(401);
     });
 
     it('responde 409 ao atualizar para e-mail já usado', async () => {
-        const { token, Id } = await registerAndLogin(app, validUser);
+        const { token, Uuid } = await registerAndLogin(app, validUser);
         await request(app)
             .post('/users')
             .send({ ...validUser, Email: 'bob@example.com' });
         const res = await request(app)
-            .put(`/users/${Id}`)
+            .put(`/users/${Uuid}`)
             .set(bearer(token))
             .send({ Email: 'bob@example.com' });
         expect(res.status).toBe(409);
     });
 });
 
-describe('DELETE /users/:id (posse do recurso)', () => {
+describe('DELETE /users/:uuid (posse do recurso)', () => {
     it('remove o próprio usuário e responde 204', async () => {
-        const { token, Id } = await registerAndLogin(app, validUser);
-        const res = await request(app).delete(`/users/${Id}`).set(bearer(token));
+        const { token, Uuid } = await registerAndLogin(app, validUser);
+        const res = await request(app).delete(`/users/${Uuid}`).set(bearer(token));
         expect(res.status).toBe(204);
         expect(res.body).toEqual({});
     });
@@ -314,21 +314,21 @@ describe('DELETE /users/:id (posse do recurso)', () => {
         const { token } = await registerAndLogin(app, validUser);
         const other = await registerAndLogin(app, { Email: 'bob@example.com' });
         const res = await request(app)
-            .delete(`/users/${other.Id}`)
+            .delete(`/users/${other.Uuid}`)
             .set(bearer(token));
         expect(res.status).toBe(403);
     });
 
     it('responde 401 sem token', async () => {
         const created = await request(app).post('/users').send(validUser);
-        const res = await request(app).delete(`/users/${created.body.Id}`);
+        const res = await request(app).delete(`/users/${created.body.Uuid}`);
         expect(res.status).toBe(401);
     });
 
     it('responde 404 ao remover novamente', async () => {
-        const { token, Id } = await registerAndLogin(app, validUser);
-        await request(app).delete(`/users/${Id}`).set(bearer(token));
-        const res = await request(app).delete(`/users/${Id}`).set(bearer(token));
+        const { token, Uuid } = await registerAndLogin(app, validUser);
+        await request(app).delete(`/users/${Uuid}`).set(bearer(token));
+        const res = await request(app).delete(`/users/${Uuid}`).set(bearer(token));
         expect(res.status).toBe(404);
     });
 });

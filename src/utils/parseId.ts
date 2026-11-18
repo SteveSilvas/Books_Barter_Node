@@ -27,3 +27,15 @@ export function parseId(value: RouteParam, field = 'Id'): number {
     }
     return parsed;
 }
+
+const UUID_REGEX =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Valida um parâmetro de rota como UUID (GUID). Lança 400 se inválido. */
+export function parseUuid(value: RouteParam, field = 'Uuid'): string {
+    const text = parseParam(value, field);
+    if (!UUID_REGEX.test(text)) {
+        throw new AppError(`${field} inválido: ${text}`, StatusCodes.BAD_REQUEST);
+    }
+    return text;
+}

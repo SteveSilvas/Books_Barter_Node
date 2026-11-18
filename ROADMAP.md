@@ -50,13 +50,17 @@ Fundação técnica e recursos de apoio já entregues:
 | Login com Google (`POST /users/google`) via verificação de ID token | ✅ | `src/utils/googleAuth.ts` |
 | Middleware de autenticação (`authenticate`) protegendo rotas de escrita | ✅ | `src/middlewares/authenticate.ts` |
 | Senha nunca retornada nas respostas (DTO público sem `Pass`) | ✅ | `src/@types/user.ts`, `UserService` |
-| Ver e editar perfil (`GET/PUT /users/me`, perfis públicos sem e-mail, posse em `/users/:id`) | ✅ | `UserController`, `authorizeSelf` |
-| CRUD de livros (`/books`) com categoria associada (`Book belongsTo Category`) | 🟡 | `src/services/BookService.ts` |
+| Ver e editar perfil (`GET/PUT /users/me`, perfis públicos sem e-mail, posse em `/users/:uuid`) | ✅ | `UserController`, `authorizeSelf` |
+| UUID (GUID) em todos os models; rotas usam `:uuid` e o `Id` fica como chave/index | ✅ | `src/models`, `src/utils/parseId.ts` |
+| Livro com dono (`Book.UserId`) e status (`BookStatus`: available/reserved/traded) | ✅ | `src/models/Book.ts`, `src/models/BookStatus.ts` |
+| Estante pessoal privada (`GET /users/me/books`) e catálogo público com busca por título | ✅ | `src/services/BookService.ts` |
+| CRUD de livros restrito ao dono (403 caso contrário) | ✅ | `src/services/BookService.ts` |
+| CRUD de livros (`/books`) com categoria associada (`Book belongsTo Category`) | ✅ | `src/services/BookService.ts` |
 | CRUD de categorias (`/categories`) | ✅ | `CategoryService` |
 | CRUD de exemplares (`/book-copies`) | ✅ | `BookCopyService` |
 | CRUD de endereços (`/addresses`) | ✅ | `AddressService` |
 | Middlewares de erro/404 e `AppError` com status HTTP | ✅ | `src/middlewares`, `src/errors` |
-| Suíte de testes de integração (Jest + Supertest, SQLite em memória, 48 casos) | ✅ | `tests/` |
+| Suíte de testes de integração (Jest + Supertest, SQLite em memória, 54 casos) | ✅ | `tests/` |
 | Dialeto duplo MySQL/SQLite por configuração (`DB_DIALECT`) | ✅ | `src/config/env.ts`, `src/database/index.ts` |
 | Documentação (README + AGENTS.md) alinhada ao código | ✅ | `README.md`, `AGENTS.md` |
 
@@ -84,35 +88,40 @@ login via Google validado no backend.
 
 ---
 
-### Fase 1 — Estante digital pública (regra 3) 🟡
+### Fase 1 — Estante digital (regra 3) ✅
 
-- [ ] Vincular `Book → User`: adicionar `UserId` em `Book` + associação `User.hasMany(Book)`
-      (alteração via model, Code First).
-- [ ] Criar `POST /books` associando o livro ao usuário autenticado (dono).
-- [ ] Criar `GET /users/:id/books` (estante de um usuário).
-- [ ] Garantir que apenas o dono edite/remova seu livro (`PUT`/`DELETE /books/:id`).
+- [x] Vincular `Book → User`: `UserId` (não nulo) em `Book` + associações `User.hasMany(Book)` /
+      `Book.belongsTo(User)` (Code First).
+- [x] `POST /books` associa o livro ao usuário autenticado (dono vindo do token).
+- [x] Estante pessoal **privada**: `GET /users/me/books` (só o dono, via token).
+- [x] Catálogo **público** com busca por título: `GET /books?title=` e `GET /books/:uuid`.
+- [x] Apenas o dono edita/remove seu livro (`PUT`/`DELETE /books/:uuid`, 403 caso contrário).
+- [x] Tabela de **status do livro** (`BookStatus`) com `available`/`reserved`/`traded`.
+- [x] `Uuid` (GUID) em todos os models; rotas usam `:uuid` (o `Id` fica só como chave/index).
 
-**Aceite:** um usuário cadastra livros e eles formam sua estante; outro usuário consegue consultá-la.
+**Aceite:** um usuário cadastra livros formando sua estante (privada) e o catálogo público permite
+ver e pesquisar livros por título, sem expor o `UserId` do dono.
 
 ---
 
-### Fase 2 — Visibilidade da estante de outros (regra 4) 🔴
+### Fase 2 — Visibilidade da estante de outros (regra 4) 🟡
 
-- [ ] `GET /users/:id/books` público (estante visível sem autenticação, se a regra exigir).
-- [ ] Paginação e ordenação na listagem de estantes/livros.
-- [ ] Visibilidade por status do livro (ex.: disponível para escambo / já negociado).
+- [x] Catálogo público (`GET /books`) com `Owner.Name` e busca por título.
+- [x] Status do livro (`available`/`reserved`/`traded`) exposto na resposta.
+- [ ] Paginação e ordenação na listagem do catálogo.
+- [ ] Filtros por categoria e por status na busca.
 
-**Aceite:** as estantes publicadas são visíveis para outros usuários.
+**Aceite:** os livros publicados são visíveis e pesquisáveis por outros usuários.
 
 ---
 
 ### Fase 3 — Recursos sociais (regras 5 e 6) 🔴
 
 - [ ] **Seguir / deixar de seguir** — model `Follow` (`FollowerId`, `FollowingId`) + associações.
-  - `POST /users/:id/follow`, `DELETE /users/:id/follow`
-  - `GET /users/:id/followers`, `GET /users/:id/following`
+  - `POST /users/:uuid/follow`, `DELETE /users/:uuid/follow`
+  - `GET /users/:uuid/followers`, `GET /users/:uuid/following`
 - [ ] **Favoritar / desfavoritar livros e estantes** — model `Favorite` (`UserId`, `BookId`/`UserId` alvo).
-  - `POST /favorites`, `DELETE /favorites/:id`, `GET /users/:id/favorites`
+  - `POST /favorites`, `DELETE /favorites/:uuid`, `GET /users/:uuid/favorites`
 - [ ] Regras de negócio: não seguir a si mesmo; não favoritar duas vezes (409).
 
 **Aceite:** o usuário segue/deixa de seguir e favorita/desfavorita, com listagens consultáveis.
@@ -123,7 +132,7 @@ login via Google validado no backend.
 
 - [ ] Model `Conversation` (participantes + livro de interesse) e `Message` (`ConversationId`, `SenderId`, texto, timestamp).
 - [ ] `POST /conversations` (abrir negociação a partir de um livro).
-- [ ] `GET /conversations`, `GET /conversations/:id/messages`, `POST /conversations/:id/messages`.
+- [ ] `GET /conversations`, `GET /conversations/:uuid/messages`, `POST /conversations/:uuid/messages`.
 - [ ] Entrega em tempo real (WebSocket/SSE) — opcional, pode iniciar com polling.
 - [ ] Regras: só participantes leem/escrevem; notificar o proprietário do livro.
 

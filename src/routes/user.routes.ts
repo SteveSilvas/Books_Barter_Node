@@ -18,17 +18,17 @@ router.put('/users/me', authenticate, asyncHandler(userController.updateMe));
 // Perfis públicos (apenas dados não sensíveis).
 router.get('/users', asyncHandler(userController.list));
 router.get('/users/email/:email', asyncHandler(userController.getByEmail));
-router.get('/users/:id', asyncHandler(userController.getById));
+router.get('/users/:uuid', asyncHandler(userController.getByUuid));
 
 // Edição/remoção restritas ao dono do recurso.
 router.put(
-    '/users/:id',
+    '/users/:uuid',
     authenticate,
     authorizeSelf,
     asyncHandler(userController.update),
 );
 router.delete(
-    '/users/:id',
+    '/users/:uuid',
     authenticate,
     authorizeSelf,
     asyncHandler(userController.remove),

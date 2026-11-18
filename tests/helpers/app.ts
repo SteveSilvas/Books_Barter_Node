@@ -1,6 +1,6 @@
 import { Express } from 'express';
 import { createApp } from '../../src/app';
-import { sequelize } from '../../src/models';
+import { seedBookStatuses, sequelize } from '../../src/models';
 
 /**
  * Cria uma instância do Express com o banco de teste já sincronizado e limpo.
@@ -8,6 +8,7 @@ import { sequelize } from '../../src/models';
  */
 export async function createTestApp(): Promise<Express> {
     await sequelize.sync({ force: true });
+    await seedBookStatuses();
     return createApp();
 }
 

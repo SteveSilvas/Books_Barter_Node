@@ -3,7 +3,7 @@ import { StatusCodes } from 'http-status-codes';
 import { LoginType } from '../@types/auth';
 import { CreateUserDTO, UpdateUserDTO } from '../@types/user';
 import { userService } from '../services/UserService';
-import { parseId, parseParam } from '../utils/parseId';
+import { parseParam, parseUuid } from '../utils/parseId';
 import { verifyGoogleIdToken } from '../utils/googleAuth';
 
 /** Monta o DTO de atualização a partir do corpo da requisição. */
@@ -34,9 +34,9 @@ export class UserController {
         return res.status(StatusCodes.OK).json(user);
     }
 
-    public async getById(req: Request, res: Response): Promise<Response> {
-        const id = parseId(req.params.id);
-        const user = await userService.getById(id);
+    public async getByUuid(req: Request, res: Response): Promise<Response> {
+        const uuid = parseUuid(req.params.uuid);
+        const user = await userService.getByUuid(uuid);
         return res.status(StatusCodes.OK).json(user);
     }
 
@@ -73,15 +73,12 @@ export class UserController {
     }
 
     public async update(req: Request, res: Response): Promise<Response> {
-        const id = parseId(req.params.id);
-        const data = buildUpdateDTO(req);
-        const user = await userService.update(id, data);
+        const user = await userService.update(req.user!.Id, buildUpdateDTO(req));
         return res.status(StatusCodes.OK).json(user);
     }
 
     public async remove(req: Request, res: Response): Promise<Response> {
-        const id = parseId(req.params.id);
-        await userService.remove(id);
+        await userService.remove(req.user!.Id);
         return res.status(StatusCodes.NO_CONTENT).send();
     }
 }

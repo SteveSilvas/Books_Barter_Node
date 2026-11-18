@@ -11,7 +11,7 @@ export interface LoginResponse {
     message: string;
     token: string;
     data: {
-        Id: number;
+        Uuid: string;
         Name: string;
         Email: string;
     };
