@@ -1,24 +1,67 @@
 # 📚 bibliotech — API de Escambo de Livros
 
-API REST em **Node.js + TypeScript** para uma plataforma de troca (escambo) de livros entre
-leitores. O backend expõe endpoints para gerenciar usuários, livros, categorias, exemplares
-e endereços, persistindo os dados via **Sequelize** em um banco **MySQL**.
+API REST em **Node.js + TypeScript** que dá suporte a uma plataforma de troca (escambo) de livros
+entre leitores. Este documento descreve **as regras de negócio do produto** (o que o sistema deve
+fazer) e mostra, em seguida, **como a API atual se posiciona em relação a elas** — o que já está
+implementado, o que está parcial e o que ainda falta.
 
 > O pacote está registrado como `bibliotech` no `package.json`.
 
 ---
 
-## ✨ Funcionalidades implementadas
+## 🎯 Objetivo do produto
 
-* **Usuários:** cadastro, consulta (por id e por e-mail), login e atualização/exclusão.
-* **Livros:** cadastro, listagem (com a categoria associada), busca por id, atualização e exclusão.
-* **Categorias:** CRUD de categorias de livros (entidade `Category`, associada a `Book`).
-* **Exemplares (`BookCopy`):** CRUD de exemplares físicos dos livros (ISBN, editora, tipo de impressão etc.).
-* **Endereços (`Address`):** CRUD de endereços (rua, número, bairro, CEP, cidade, estado, país).
+Alguns leitores gostam de colecionar seus livros prediletos, mas com o tempo acumulam mais do que
+conseguem guardar. A troca entre amigos é a solução mais comum, porém nem sempre garante que o leitor
+encontre o exato livro que deseja. A proposta deste sistema é permitir que os leitores compartilhem
+os livros dos quais pretendem se desapegar e encontrem seus livros de interesse por meio de
+**escambo negociado diretamente com o proprietário**.
 
-> As entidades **BookCopy**, **Category** e **Address** já possuem controller, rotas e model,
-> mas as suas rotas ainda **não estão registradas** na aplicação. Veja a seção
-> [Rotas disponíveis](#-rotas-disponíveis).
+---
+
+## 📋 Regras de negócio (a cumprir)
+
+Estas são as regras gerais que a solução deve atender (baseadas em `documentation/requirements.txt`).
+Elas são a referência do projeto — o código é apenas uma parte do que ainda precisa ser construído.
+
+1. **Acesso autenticado:** para acessar o sistema é necessário estar logado (com o Google) ou cadastrado.
+2. **Perfil do usuário:** o usuário pode ver e editar o próprio perfil.
+3. **Estante digital:** o usuário pode cadastrar seus livros, criando uma estante digital pública.
+4. **Visibilidade pública:** uma vez publicados, outros usuários podem visualizar essa estante digital.
+5. **Rede social:** os usuários podem seguir e deixar de seguir uns aos outros.
+6. **Favoritos:** os usuários podem favoritar e desfavoritar estantes e livros para ver futuramente.
+7. **Negociação por chat:** os usuários podem abrir um chat de negociação para escambar um livro de interesse.
+
+**Atores:** usuários que cadastram seus livros e interagem com a comunidade para encontrar livros de
+interesse e se desfazer de exemplares que não precisam.
+
+---
+
+## ✅ Cobertura atual: regras × API
+
+A tabela abaixo cruza cada regra de negócio com o que existe hoje no código. Use-a como mapa do que
+já foi entregue e do que ainda precisa ser desenvolvido.
+
+| # | Regra de negócio | Status | O que existe no código hoje |
+|---|------------------|--------|------------------------------|
+| 1 | Acesso autenticado | 🟡 Parcial | Cadastro (`POST /users/add`) e login por e-mail/senha (`POST /users/login`). **Falta** login via Google e sessão/token (hoje o login apenas retorna os dados do usuário). |
+| 2 | Ver e editar perfil | 🟡 Parcial | Consulta por id/e-mail e `PUT /users/update`. O update **não persiste** os campos alterados (apenas chama `save()` sem atribuir os valores) — precisa ser corrigido. |
+| 3 | Estante digital pública | 🟡 Parcial | Cadastro e listagem de livros (`/books`). **Falta** o vínculo `Book → User` (não há noção de "dono" da estante). |
+| 4 | Visibilidade da estante de outros | 🔴 Pendente | Existe listagem geral de livros, mas **sem filtro por usuário/estante**. |
+| 5 | Seguir / deixar de seguir | 🔴 Pendente | Não implementado (sem entidade de relacionamento entre usuários). |
+| 6 | Favoritar / desfavoritar | 🔴 Pendente | Não implementado (sem entidade de favoritos). |
+| 7 | Chat de negociação | 🔴 Pendente | Não implementado (sem entidades de conversa/mensagem). |
+
+**Legenda:** ✅ implementado · 🟡 parcial · 🔴 pendente.
+
+### Estruturas já preparadas (aguardando uso)
+
+Alguns models e controllers já foram criados para dar suporte a essas regras, mas ainda não estão
+conectados à aplicação:
+
+* **`BookCopy`** (exemplares físicos dos livros) e **`Category`** (categorias de livros) possuem
+  model, controller e rotas — porém as rotas estão comentadas em `src/index.ts`.
+* **`Address`** possui model, controller e rotas (também comentadas), útil para endereços/logística de troca.
 
 ---
 
@@ -68,6 +111,54 @@ e endereços, persistindo os dados via **Sequelize** em um banco **MySQL**.
 ├── package.json
 └── tsconfig.json
 ```
+
+---
+
+## 🔌 Rotas implementadas
+
+Rotas efetivamente registradas hoje em `src/index.ts`:
+
+| Método | Rota                  | Descrição                          | Corpo da requisição |
+|--------|-----------------------|------------------------------------|---------------------|
+| GET    | `/status`             | Health check da API                | —                   |
+| GET    | `/users`              | Lista todos os usuários            | —                   |
+| POST   | `/users/add`          | Cadastra um usuário                | `{ Name, Birth, Email, Pass }` |
+| POST   | `/users/login`        | Autentica um usuário               | `{ Email, Pass }`   |
+| GET    | `/users/:id`          | Busca usuário por id               | —                   |
+| GET    | `/users/email/:email` | Busca usuário por e-mail           | —                   |
+| PUT    | `/users/update`       | Atualiza um usuário                | `{ Id, Name, Birth, Email, Pass }` |
+| DELETE | `/users/delete`       | Remove um usuário                  | `{ Id }`            |
+| GET    | `/books`              | Lista livros (ordem decrescente por id, com a categoria) | — |
+| POST   | `/books/add`          | Cadastra um livro                  | `{ data: { Title, Autor, CategoryId, CreationDate, CreationLocality } }` |
+| GET    | `/books/:Id`          | Busca livro por id                 | —                   |
+| PUT    | `/books/update`       | Atualiza um livro                  | `{ Id, Title, Autor, CreationDate, CreationLocality }` |
+| DELETE | `/books/delete`       | Remove um livro                    | `{ Id }`            |
+
+### Rotas definidas mas não registradas
+
+Os arquivos abaixo existem, mas as rotas estão comentadas em `src/index.ts` e, portanto,
+não respondem ainda:
+
+* `src/router/bookCategory.routes.ts` — `/category`, `/category/add`, `/category/:Id`, `/category/update`, `/category/delete`
+* `src/router/bookCopy.routes.ts` — `/books`, `/books/add`, `/books/:Id`, `/books/update`, `/books/delete`
+* `src/router/address.routes.ts` — `/address`, `/address/add`, `/address/:Id`, `/boaddressoks/update`, `/address/delete`
+  (atenção: a rota de atualização de endereço tem um erro de digitação no caminho — `boaddressoks`)
+
+---
+
+## 🗄️ Modelos de dados
+
+Definidos em `src/entity/` com Sequelize:
+
+* **User:** `Id`, `Name`, `Birth`, `Email` (único), `Pass`
+* **Book:** `Id`, `Title`, `Autor`, `CreationDate`, `CreationLocality`, `CategoryId` (`belongsTo` Category)
+* **Category:** `Id`, `Description`
+* **BookCopy:** `Id`, `ISBN`, `Editora`, `TypePrint`, `PublicationDate`, `PublicationLocality`
+* **Address:** `Id`, `Rua`, `Numero`, `Complemento`, `Bairro`, `Cep`, `Cidade`, `Estado`, `Pais`
+
+O model `UserEntity` chama `database.sync()`, o que cria/atualiza a tabela de usuários
+automaticamente na inicialização. Os demais models não executam `sync` (as chamadas estão
+comentadas), sendo necessário criá-los manualmente no banco.
 
 ---
 
@@ -124,54 +215,6 @@ e endereços, persistindo os dados via **Sequelize** em um banco **MySQL**.
    npm start
    ```
    O `build` gera o JavaScript em `dist/` e o `start` executa `dist/index.js`.
-
----
-
-## 🔌 Rotas disponíveis
-
-Todas as rotas registradas atualmente em `src/index.ts`:
-
-| Método | Rota                  | Descrição                          | Corpo da requisição |
-|--------|-----------------------|------------------------------------|---------------------|
-| GET    | `/status`             | Health check da API                | —                   |
-| GET    | `/users`              | Lista todos os usuários            | —                   |
-| POST   | `/users/add`          | Cadastra um usuário                | `{ Name, Birth, Email, Pass }` |
-| POST   | `/users/login`        | Autentica um usuário               | `{ Email, Pass }`   |
-| GET    | `/users/:id`          | Busca usuário por id               | —                   |
-| GET    | `/users/email/:email` | Busca usuário por e-mail           | —                   |
-| PUT    | `/users/update`       | Atualiza um usuário                | `{ Id, Name, Birth, Email, Pass }` |
-| DELETE | `/users/delete`       | Remove um usuário                  | `{ Id }`            |
-| GET    | `/books`              | Lista livros (ordem decrescente por id, com a categoria) | — |
-| POST   | `/books/add`          | Cadastra um livro                  | `{ data: { Title, Autor, CategoryId, CreationDate, CreationLocality } }` |
-| GET    | `/books/:Id`          | Busca livro por id                 | —                   |
-| PUT    | `/books/update`       | Atualiza um livro                  | `{ Id, Title, Autor, CreationDate, CreationLocality }` |
-| DELETE | `/books/delete`       | Remove um livro                    | `{ Id }`            |
-
-### Rotas definidas mas não registradas
-
-Os arquivos abaixo existem, mas as rotas estão comentadas em `src/index.ts` e, portanto,
-não respondem ainda:
-
-* `src/router/bookCategory.routes.ts` — `/category`, `/category/add`, `/category/:Id`, `/category/update`, `/category/delete`
-* `src/router/bookCopy.routes.ts` — `/books`, `/books/add`, `/books/:Id`, `/books/update`, `/books/delete`
-* `src/router/address.routes.ts` — `/address`, `/address/add`, `/address/:Id`, `/boaddressoks/update`, `/address/delete`
-  (atenção: a rota de atualização de endereço tem um erro de digitação no caminho — `boaddressoks`)
-
----
-
-## 🗄️ Modelos de dados
-
-Definidos em `src/entity/` com Sequelize:
-
-* **User:** `Id`, `Name`, `Birth`, `Email` (único), `Pass`
-* **Book:** `Id`, `Title`, `Autor`, `CreationDate`, `CreationLocality`, `CategoryId` (`belongsTo` Category)
-* **Category:** `Id`, `Description`
-* **BookCopy:** `Id`, `ISBN`, `Editora`, `TypePrint`, `PublicationDate`, `PublicationLocality`
-* **Address:** `Id`, `Rua`, `Numero`, `Complemento`, `Bairro`, `Cep`, `Cidade`, `Estado`, `Pais`
-
-O model `UserEntity` chama `database.sync()`, o que cria/atualiza a tabela de usuários
-automaticamente na inicialização. Os demais models não executam `sync` (as chamadas estão
-comentadas), sendo necessário criá-los manualmente no banco.
 
 ---
 
