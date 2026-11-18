@@ -1,8 +1,15 @@
 import { StatusCodes } from 'http-status-codes';
-import { CreateUserDTO, UpdateUserDTO, UserType } from '../@types/user';
 import { LoginResponse, LoginType } from '../@types/auth';
+import {
+    CreateUserDTO,
+    GoogleUserDTO,
+    UpdateUserDTO,
+    UserType,
+} from '../@types/user';
 import { AppError } from '../errors/AppError';
 import { User } from '../models';
+import { hashPassword, verifyPassword } from '../utils/password';
+import { signToken } from '../utils/jwt';
 
 export interface IUserService {
     list(): Promise<UserType[]>;
@@ -10,14 +17,36 @@ export interface IUserService {
     getByEmail(email: string): Promise<UserType>;
     create(data: CreateUserDTO): Promise<UserType>;
     login(data: LoginType): Promise<LoginResponse>;
+    loginWithGoogle(data: GoogleUserDTO): Promise<LoginResponse>;
     update(id: number, data: UpdateUserDTO): Promise<UserType>;
     remove(id: number): Promise<void>;
+}
+
+/** Remove a senha antes de expor o usuário para fora do domínio. */
+function toPublic(user: User): UserType {
+    const { Id, Name, Birth, Email, createdAt, updatedAt } = user.get({
+        plain: true,
+    });
+    return { Id, Name, Birth, Email, createdAt, updatedAt };
+}
+
+function toLoginResponse(user: User): LoginResponse {
+    const publicUser = toPublic(user);
+    return {
+        message: 'Usuário logado com sucesso.',
+        token: signToken({ sub: publicUser.Id, email: publicUser.Email }),
+        data: {
+            Id: publicUser.Id,
+            Name: publicUser.Name,
+            Email: publicUser.Email,
+        },
+    };
 }
 
 export class UserService implements IUserService {
     public async list(): Promise<UserType[]> {
         const users = await User.findAll();
-        return users.map((user) => user.get({ plain: true }) as UserType);
+        return users.map(toPublic);
     }
 
     public async getById(id: number): Promise<UserType> {
@@ -25,7 +54,7 @@ export class UserService implements IUserService {
         if (!user) {
             throw new AppError('Usuário não encontrado.', StatusCodes.NOT_FOUND);
         }
-        return user.get({ plain: true }) as UserType;
+        return toPublic(user);
     }
 
     public async getByEmail(email: string): Promise<UserType> {
@@ -33,7 +62,7 @@ export class UserService implements IUserService {
         if (!user) {
             throw new AppError('Usuário não encontrado.', StatusCodes.NOT_FOUND);
         }
-        return user.get({ plain: true }) as UserType;
+        return toPublic(user);
     }
 
     public async create(data: CreateUserDTO): Promise<UserType> {
@@ -45,23 +74,44 @@ export class UserService implements IUserService {
             );
         }
 
-        const user = await User.create(data);
-        return user.get({ plain: true }) as UserType;
+        const user = await User.create({
+            Name: data.Name,
+            Birth: data.Birth,
+            Email: data.Email,
+            Pass: await hashPassword(data.Pass),
+            Provider: 'local',
+        });
+        return toPublic(user);
     }
 
     public async login(data: LoginType): Promise<LoginResponse> {
         const user = await User.findOne({ where: { Email: data.Email } });
-        if (!user) {
+        if (!user || !user.Pass) {
             throw new AppError('Email inválido.', StatusCodes.UNAUTHORIZED);
         }
-        if (user.Pass !== data.Pass) {
+        if (!(await verifyPassword(data.Pass, user.Pass))) {
             throw new AppError('Senha incorreta.', StatusCodes.UNAUTHORIZED);
         }
 
-        return {
-            message: 'Usuário logado com sucesso.',
-            data: { Id: user.Id, Name: user.Name, Email: user.Email },
-        };
+        return toLoginResponse(user);
+    }
+
+    /**
+     * Autentica (ou cadastra) um usuário a partir dos dados verificados de um
+     * login Google. Usuários novos entram sem senha local (`Pass` nulo).
+     */
+    public async loginWithGoogle(data: GoogleUserDTO): Promise<LoginResponse> {
+        let user = await User.findOne({ where: { Email: data.Email } });
+        if (!user) {
+            user = await User.create({
+                Name: data.Name,
+                Birth: null,
+                Email: data.Email,
+                Pass: null,
+                Provider: 'google',
+            });
+        }
+        return toLoginResponse(user);
     }
 
     public async update(id: number, data: UpdateUserDTO): Promise<UserType> {
@@ -83,10 +133,10 @@ export class UserService implements IUserService {
         if (data.Name !== undefined) user.Name = data.Name;
         if (data.Birth !== undefined) user.Birth = data.Birth;
         if (data.Email !== undefined) user.Email = data.Email;
-        if (data.Pass !== undefined) user.Pass = data.Pass;
+        if (data.Pass !== undefined) user.Pass = await hashPassword(data.Pass);
 
         await user.save();
-        return user.get({ plain: true }) as UserType;
+        return toPublic(user);
     }
 
     public async remove(id: number): Promise<void> {

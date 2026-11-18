@@ -47,7 +47,7 @@ já foi entregue e do que ainda precisa ser desenvolvido.
 
 | # | Regra de negócio | Status | O que existe no código hoje |
 |---|------------------|--------|------------------------------|
-| 1 | Acesso autenticado | 🟡 Parcial | Cadastro (`POST /users`) e login por e-mail/senha (`POST /users/login`). **Falta** login via Google e sessão/token (hoje o login apenas retorna os dados do usuário). |
+| 1 | Acesso autenticado | ✅ Implementado | Cadastro (`POST /users`), login por e-mail/senha (`POST /users/login`) e login com Google (`POST /users/google`). Senhas com **hash (bcrypt)**, sessão por **JWT** (`Authorization: Bearer <token>`) e rotas de escrita protegidas pelo middleware `authenticate`. |
 | 2 | Ver e editar perfil | ✅ Implementado | Consulta por id/e-mail e `PUT /users/:id` (edição de perfil). O update persiste apenas os campos enviados (parcial) e impede e-mail duplicado. |
 | 3 | Estante digital pública | 🟡 Parcial | Cadastro e listagem de livros (`/books`). **Falta** o vínculo `Book → User` (não há noção de "dono" da estante). |
 | 4 | Visibilidade da estante de outros | 🔴 Pendente | Existe listagem geral de livros, mas **sem filtro por usuário/estante**. |
@@ -79,7 +79,7 @@ explícitos em toda a fronteira entre elas:
 | **Controllers** | `src/controllers` | Traduzem HTTP ↔ domínio: leem `req`, montam o DTO e devolvem a resposta com o status HTTP correto. Não contêm regra de negócio. |
 | **Services** | `src/services` | Concentram as **regras de negócio** e o acesso aos models. Lançam `AppError` com o status HTTP adequado. |
 | **Models** | `src/models` | Definem o schema e as associações do Sequelize (classes tipadas). |
-| **Middlewares** | `src/middlewares` | `asyncHandler` (propaga erros de handlers assíncronos), `errorHandler` (traduz `AppError` → resposta HTTP) e `notFoundHandler` (404). |
+| **Middlewares** | `src/middlewares` | `asyncHandler` (propaga erros de handlers assíncronos), `authenticate` (valida o JWT e popula `req.user`), `errorHandler` (traduz `AppError` → resposta HTTP) e `notFoundHandler` (404). |
 | **Infra** | `src/config`, `src/database`, `src/errors`, `src/utils`, `src/@types` | Configuração de ambiente, conexão, erro de aplicação, utilitários e DTOs. |
 
 O fluxo de uma requisição é: `rota → controller → service → model`, e qualquer erro sobe até o
@@ -93,7 +93,7 @@ O fluxo de uma requisição é: `rota → controller → service → model`, e q
 | `201 Created` | Recurso criado (POST) |
 | `204 No Content` | Recurso removido (DELETE) |
 | `400 Bad Request` | Parâmetro inválido (ex.: `id` não numérico) |
-| `401 Unauthorized` | Credenciais inválidas no login |
+| `401 Unauthorized` | Credenciais inválidas no login ou token ausente/inválido |
 | `404 Not Found` | Recurso ou rota inexistente |
 | `409 Conflict` | E-mail já cadastrado |
 | `500 Internal Server Error` | Erro inesperado |
@@ -117,6 +117,7 @@ npx tsc --noEmit
 * **ORM:** Sequelize 6
 * **Banco de Dados:** MySQL (`mysql2`)
 * **Utilitários:** `cors`, `dotenv`, `http-status-codes`
+* **Autenticação:** `jsonwebtoken` (JWT), `bcryptjs` (hash de senha), `google-auth-library` (login Google)
 * **Testes:** Jest + Supertest com `@swc/jest` (SQLite em memória)
 
 ---
@@ -128,7 +129,7 @@ npx tsc --noEmit
 ├── src
 │   ├── index.ts                # Bootstrap: conecta no banco, sincroniza e sobe o servidor
 │   ├── app.ts                  # Cria e configura a instância do Express
-│   ├── @types                  # DTOs e tipos (user, auth, book, category, bookCopy, address)
+│   ├── @types                  # DTOs e tipos (user, auth, book, category, bookCopy, address) + express.d.ts
 │   ├── config
 │   │   └── env.ts              # Leitura e validação das variáveis de ambiente
 │   ├── database
@@ -137,10 +138,14 @@ npx tsc --noEmit
 │   │   └── AppError.ts         # Erro de aplicação com código HTTP
 │   ├── middlewares
 │   │   ├── asyncHandler.ts     # Encaminha rejeições para o errorHandler
+│   │   ├── authenticate.ts     # Valida o JWT e popula req.user
 │   │   ├── errorHandler.ts     # Traduz erros em respostas HTTP
 │   │   └── notFoundHandler.ts  # 404 para rotas desconhecidas
 │   ├── utils
-│   │   └── parseId.ts          # Valida/converte parâmetros de rota (id e outros)
+│   │   ├── parseId.ts          # Valida/converte parâmetros de rota (id e outros)
+│   │   ├── password.ts         # Hash e verificação de senha (bcrypt)
+│   │   ├── jwt.ts              # Assinatura e verificação de token (JWT)
+│   │   └── googleAuth.ts       # Valida o ID token do Google
 │   ├── models                  # Models Sequelize tipados
 │   │   ├── index.ts            # Barrel + syncDatabase()
 │   │   ├── User.ts
@@ -170,7 +175,9 @@ npx tsc --noEmit
 │       └── address.routes.ts
 ├── tests                       # Suíte Jest + Supertest (SQLite em memória)
 │   ├── setup-env.ts
-│   ├── helpers/app.ts
+│   ├── helpers
+│   │   ├── app.ts
+│   │   └── auth.ts
 │   ├── users.test.ts
 │   └── resources.test.ts
 ├── documentation               # Requisitos e diagrama de caso de uso
@@ -188,6 +195,7 @@ npx tsc --noEmit
 ## 🔌 Endpoints
 
 Todos os recursos expõem o CRUD RESTful completo. `{id}` é sempre um inteiro positivo.
+Rotas marcadas com 🔒 exigem autenticação (`Authorization: Bearer <token>`).
 
 ### Status
 
@@ -199,53 +207,77 @@ Todos os recursos expõem o CRUD RESTful completo. `{id}` é sempre um inteiro p
 
 | Método | Rota | Descrição | Corpo |
 |--------|------|-----------|-------|
+| POST | `/users` | Cadastra um usuário | `{ Name, Birth?, Email, Pass }` |
+| POST | `/users/login` | Autentica por e-mail/senha e devolve `token` | `{ Email, Pass }` |
+| POST | `/users/google` | Autentica com Google (`idToken`) e devolve `token` | `{ idToken }` |
+| GET 🔒 | `/users/me` | Perfil do usuário autenticado | — |
 | GET | `/users` | Lista todos os usuários | — |
-| POST | `/users` | Cadastra um usuário | `{ Name, Birth, Email, Pass }` |
-| POST | `/users/login` | Autentica um usuário | `{ Email, Pass }` |
 | GET | `/users/:id` | Busca usuário por id | — |
 | GET | `/users/email/:email` | Busca usuário por e-mail | — |
-| PUT | `/users/:id` | Atualiza um usuário (aceita atualização parcial) | `{ Name?, Birth?, Email?, Pass? }` |
-| DELETE | `/users/:id` | Remove um usuário | — |
+| PUT 🔒 | `/users/:id` | Atualiza um usuário (aceita atualização parcial) | `{ Name?, Birth?, Email?, Pass? }` |
+| DELETE 🔒 | `/users/:id` | Remove um usuário | — |
 
 ### Livros
 
 | Método | Rota | Descrição | Corpo |
 |--------|------|-----------|-------|
 | GET | `/books` | Lista livros (ordem decrescente por id, com a categoria) | — |
-| POST | `/books` | Cadastra um livro | `{ Title, Autor, CategoryId, CreationDate?, CreationLocality? }` |
+| POST 🔒 | `/books` | Cadastra um livro | `{ Title, Autor, CategoryId, CreationDate?, CreationLocality? }` |
 | GET | `/books/:id` | Busca livro por id | — |
-| PUT | `/books/:id` | Atualiza um livro | `{ Title?, Autor?, CategoryId?, CreationDate?, CreationLocality? }` |
-| DELETE | `/books/:id` | Remove um livro | — |
+| PUT 🔒 | `/books/:id` | Atualiza um livro | `{ Title?, Autor?, CategoryId?, CreationDate?, CreationLocality? }` |
+| DELETE 🔒 | `/books/:id` | Remove um livro | — |
 
 ### Categorias
 
 | Método | Rota | Descrição | Corpo |
 |--------|------|-----------|-------|
 | GET | `/categories` | Lista categorias | — |
-| POST | `/categories` | Cadastra uma categoria | `{ Description }` |
+| POST 🔒 | `/categories` | Cadastra uma categoria | `{ Description }` |
 | GET | `/categories/:id` | Busca categoria por id | — |
-| PUT | `/categories/:id` | Atualiza uma categoria | `{ Description? }` |
-| DELETE | `/categories/:id` | Remove uma categoria | — |
+| PUT 🔒 | `/categories/:id` | Atualiza uma categoria | `{ Description? }` |
+| DELETE 🔒 | `/categories/:id` | Remove uma categoria | — |
 
 ### Exemplares de livros (BookCopy)
 
 | Método | Rota | Descrição | Corpo |
 |--------|------|-----------|-------|
 | GET | `/book-copies` | Lista exemplares | — |
-| POST | `/book-copies` | Cadastra um exemplar | `{ ISBN?, Editora, TypePrint, PublicationDate, PublicationLocality? }` |
+| POST 🔒 | `/book-copies` | Cadastra um exemplar | `{ ISBN?, Editora, TypePrint, PublicationDate, PublicationLocality? }` |
 | GET | `/book-copies/:id` | Busca exemplar por id | — |
-| PUT | `/book-copies/:id` | Atualiza um exemplar | `{ ISBN?, Editora?, TypePrint?, PublicationDate?, PublicationLocality? }` |
-| DELETE | `/book-copies/:id` | Remove um exemplar | — |
+| PUT 🔒 | `/book-copies/:id` | Atualiza um exemplar | `{ ISBN?, Editora?, TypePrint?, PublicationDate?, PublicationLocality? }` |
+| DELETE 🔒 | `/book-copies/:id` | Remove um exemplar | — |
 
 ### Endereços
 
 | Método | Rota | Descrição | Corpo |
 |--------|------|-----------|-------|
 | GET | `/addresses` | Lista endereços | — |
-| POST | `/addresses` | Cadastra um endereço | `{ Rua, Numero, Complemento, Bairro, Cep, Cidade, Estado, Pais }` |
+| POST 🔒 | `/addresses` | Cadastra um endereço | `{ Rua, Numero, Complemento, Bairro, Cep, Cidade, Estado, Pais }` |
 | GET | `/addresses/:id` | Busca endereço por id | — |
-| PUT | `/addresses/:id` | Atualiza um endereço | campos parciais do endereço |
-| DELETE | `/addresses/:id` | Remove um endereço | — |
+| PUT 🔒 | `/addresses/:id` | Atualiza um endereço | campos parciais do endereço |
+| DELETE 🔒 | `/addresses/:id` | Remove um endereço | — |
+
+### Autenticação (Regra 1)
+
+1. **Cadastro local:** `POST /users` grava a senha como **hash bcrypt** e nunca a devolve.
+2. **Login local:** `POST /users/login` valida a senha e responde
+   `{ message, token, data: { Id, Name, Email } }`.
+3. **Login com Google:** o cliente obtém um **ID token** (Google Identity Services) e envia em
+   `POST /users/google` como `{ "idToken": "<token>" }`. O backend valida o token contra
+   `GOOGLE_CLIENT_ID` e cria o usuário no primeiro acesso (`Provider = google`, sem senha local).
+4. **Uso do token:** envie `Authorization: Bearer <token>` nas rotas protegidas (🔒). O token é um
+   **JWT** assinado com `JWT_SECRET`, com validade definida em `JWT_EXPIRES_IN`.
+
+```bash
+# 1) login
+curl -X POST http://localhost:3000/users/login \
+  -H 'Content-Type: application/json' \
+  -d '{"Email":"ana@example.com","Pass":"secret"}'
+# => { "message": "...", "token": "<jwt>", "data": { ... } }
+
+# 2) requisição autenticada
+curl http://localhost:3000/users/me -H "Authorization: Bearer <jwt>"
+```
 
 ### Formato de erro
 
@@ -261,7 +293,7 @@ Erros retornam o status HTTP adequado e um corpo padronizado:
 
 Definidos em `src/models/` como classes Sequelize tipadas:
 
-* **User:** `Id`, `Name`, `Birth`, `Email` (único), `Pass`
+* **User:** `Id`, `Name`, `Birth` (opcional), `Email` (único), `Pass` (hash bcrypt; nulo em contas Google), `Provider` (`local`/`google`)
 * **Book:** `Id`, `Title`, `Autor`, `CreationDate`, `CreationLocality`, `CategoryId` (`belongsTo` Category)
 * **Category:** `Id`, `Description`
 * **BookCopy:** `Id`, `ISBN`, `Editora`, `TypePrint`, `PublicationDate`, `PublicationLocality`
@@ -310,12 +342,20 @@ criando/atualizando todas as tabelas automaticamente.
 
    # Porta do servidor HTTP (padrão: 3000)
    PORT=3000
+
+   # Autenticação (Regra 1)
+   JWT_SECRET=troque-por-um-segredo-forte
+   JWT_EXPIRES_IN=1d
+   GOOGLE_CLIENT_ID=seu-client-id.apps.googleusercontent.com
    ```
 
    Com `DB_DIALECT=mysql`, as variáveis `DB_NAME`, `DB_USER` e `DB_HOST` são obrigatórias — se
    faltarem, a aplicação falha na inicialização com uma mensagem clara. Com `DB_DIALECT=sqlite`,
    nenhuma credencial é exigida e o banco é um arquivo local (`DB_STORAGE`, padrão `:memory:`),
    configuração usada pela suíte de testes.
+
+   `JWT_SECRET` e `JWT_EXPIRES_IN` controlam a assinatura/validade do token (há padrões apenas para
+   desenvolvimento). `GOOGLE_CLIENT_ID` é o audience aceito em `POST /users/google`.
 
 4. **Inicie o servidor de desenvolvimento:**
    ```bash
@@ -357,9 +397,11 @@ executá-los.
 npm test
 ```
 
-Cobertura atual (27 casos): criação/listagem/busca/atualização/remoção de usuários, login válido e
-inválido, e-mail duplicado, id inválido, recurso e rota inexistentes, e o ciclo CRUD completo de
-`books`, `categories`, `book-copies` e `addresses` — verificando os status HTTP esperados
+Cobertura atual (38 casos): criação/listagem/busca/atualização/remoção de usuários, login válido e
+inválido, senha com hash (não em texto puro), **token JWT** e rotas protegidas (401 sem token/token
+inválido), login Google (400 sem `idToken`, 401 com `idToken` inválido), e-mail duplicado, id
+inválido, recurso e rota inexistentes, e o ciclo CRUD completo de `books`, `categories`,
+`book-copies` e `addresses` — verificando os status HTTP esperados
 (`200`, `201`, `204`, `400`, `401`, `404`, `409`).
 
 Estrutura:
@@ -367,8 +409,10 @@ Estrutura:
 ```
 tests/
 ├── setup-env.ts        # Define DB_DIALECT=sqlite antes de carregar a aplicação
-├── helpers/app.ts      # Cria o app Express com banco sincronizado/limpo
-├── users.test.ts       # Usuários, login, erros e 404
+├── helpers
+│   ├── app.ts          # Cria o app Express com banco sincronizado/limpo
+│   └── auth.ts         # Cadastra/loga e devolve o token para requisições autenticadas
+├── users.test.ts       # Usuários, autenticação, login, erros e 404
 └── resources.test.ts   # Books, Categories, BookCopies, Addresses
 ```
 
@@ -389,9 +433,11 @@ A plataforma incentiva boas práticas para a segurança da comunidade:
 
 ### Limitações conhecidas
 
-* As senhas dos usuários são armazenadas em **texto puro** (sem hash) e a comparação no login é feita
-  diretamente. Recomenda-se adicionar hashing (ex.: bcrypt) antes de uso em produção.
-* Não há autenticação por token/JWT nas rotas; o login apenas retorna os dados do usuário.
+* As rotas de **leitura** de usuários/livros ainda são públicas; apenas as de **escrita** exigem
+  token (alinhado às regras 2–4, que serão refinadas nas próximas fases).
+* Não há **refresh token** nem revogação de JWT: o token expira conforme `JWT_EXPIRES_IN`.
+* O login com Google valida o ID token no backend; não há fluxo OAuth interativo (redirect) — o
+  cliente obtém o ID token (Google Identity Services) e o envia à API.
 
 ---
 

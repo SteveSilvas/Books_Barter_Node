@@ -25,9 +25,16 @@ export interface DatabaseConfig {
     storage?: string;
 }
 
+export interface AuthConfig {
+    jwtSecret: string;
+    jwtExpiresIn: string;
+    googleClientId: string;
+}
+
 export interface AppConfig {
     server: ServerConfig;
     database: DatabaseConfig;
+    auth: AuthConfig;
 }
 
 const dialect = (process.env.DB_DIALECT ?? 'mysql') as Dialect;
@@ -46,5 +53,10 @@ export const env: AppConfig = {
         port: Number(process.env.DB_PORT ?? 3306),
         dialect,
         storage: isSqlite ? (process.env.DB_STORAGE ?? ':memory:') : undefined,
+    },
+    auth: {
+        jwtSecret: process.env.JWT_SECRET ?? 'troque-este-segredo-em-producao',
+        jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '1d',
+        googleClientId: process.env.GOOGLE_CLIENT_ID ?? '',
     },
 };

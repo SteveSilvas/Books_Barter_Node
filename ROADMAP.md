@@ -46,14 +46,17 @@ Fundação técnica e recursos de apoio já entregues:
 | Arquitetura em camadas (`rota → controller → service → model`) com tipagem explícita | ✅ | `src/` |
 | Stack modernizada: Node 26, TypeScript 7, Express 5, Sequelize 6, MySQL (`mysql2`) | ✅ | `package.json`, `.nvmrc` |
 | Cadastro de usuário (`POST /users`) com bloqueio de e-mail duplicado (409) | ✅ | `src/services/UserService.ts` |
-| Login por e-mail/senha (`POST /users/login`) | 🟡 | `src/services/UserService.ts` |
+| Login por e-mail/senha (`POST /users/login`) com **hash bcrypt** e **JWT** | ✅ | `src/services/UserService.ts` |
+| Login com Google (`POST /users/google`) via verificação de ID token | ✅ | `src/utils/googleAuth.ts` |
+| Middleware de autenticação (`authenticate`) protegendo rotas de escrita | ✅ | `src/middlewares/authenticate.ts` |
+| Senha nunca retornada nas respostas (DTO público sem `Pass`) | ✅ | `src/@types/user.ts`, `UserService` |
 | Ver e editar perfil (`GET /users/:id`, `GET /users/email/:email`, `PUT /users/:id` parcial) | ✅ | `UserController` |
 | CRUD de livros (`/books`) com categoria associada (`Book belongsTo Category`) | 🟡 | `src/services/BookService.ts` |
 | CRUD de categorias (`/categories`) | ✅ | `CategoryService` |
 | CRUD de exemplares (`/book-copies`) | ✅ | `BookCopyService` |
 | CRUD de endereços (`/addresses`) | ✅ | `AddressService` |
 | Middlewares de erro/404 e `AppError` com status HTTP | ✅ | `src/middlewares`, `src/errors` |
-| Suíte de testes de integração (Jest + Supertest, SQLite em memória, 27 casos) | ✅ | `tests/` |
+| Suíte de testes de integração (Jest + Supertest, SQLite em memória, 38 casos) | ✅ | `tests/` |
 | Dialeto duplo MySQL/SQLite por configuração (`DB_DIALECT`) | ✅ | `src/config/env.ts`, `src/database/index.ts` |
 | Documentação (README + AGENTS.md) alinhada ao código | ✅ | `README.md`, `AGENTS.md` |
 
@@ -63,19 +66,21 @@ Fundação técnica e recursos de apoio já entregues:
 
 Cada regra recebe uma fase, com tarefas acionáveis e critérios de aceite.
 
-### Fase 0 — Fundação de autenticação 🧱 (habilita as regras 1–7)
+### Fase 0 — Fundação de autenticação 🧱 (regra 1) ✅
 
 > Sem sessão/identidade confiável, não há como saber "quem é o dono", "quem segue" ou "quem negocia".
 
-- [ ] **Hash de senha** (bcrypt/argon2) no cadastro e no login (hoje `Pass` é texto puro).
-- [ ] **Emissão de token** (JWT) no `POST /users/login` e middleware de autenticação.
-- [ ] **Login com Google** (OAuth 2.0 / OpenID Connect) — regra 1.
-- [ ] Middleware de autorização: rotas de escrita exigem usuário autenticado.
-- [ ] Ajustar respostas: `401` para token ausente/inválido.
-- [ ] Migrações versionadas **geradas a partir dos models** (Code First), substituindo `sync()` em produção.
+- [x] **Hash de senha** (bcrypt) no cadastro, no login e no update de senha.
+- [x] **Emissão de token** (JWT) em `POST /users/login` e middleware `authenticate`.
+- [x] **Login com Google** via verificação de ID token (`POST /users/google`).
+- [x] Middleware de autorização: rotas de escrita exigem usuário autenticado.
+- [x] Respostas `401` para token ausente/inválido; senha nunca retornada.
+- [ ] Migrações versionadas **geradas a partir dos models** (Code First), substituindo `sync()` em produção. *(transversal — ver Dívidas técnicas)*
 
-**Aceite:** é possível cadastrar/logar (senha com hash), receber um token e acessar rotas protegidas;
-login via Google funcional.
+**Aceite atendido:** cadastro/loga com senha em hash, recebe um token e acessa rotas protegidas;
+login via Google validado no backend.
+
+**Pendência desta fase:** migrações versionadas (item transversal, não bloqueia as demais fases).
 
 ---
 
@@ -155,9 +160,10 @@ Uma tarefa só é considerada concluída quando:
 ## 🔭 Visão de sequência
 
 ```
-Fase 0 (auth/sessão)  →  Fase 1 (estante)  →  Fase 2 (visibilidade)
-                                              ↘
-                                               Fase 3 (social)  →  Fase 4 (chat)
+Fase 0 (auth/sessão) ✅  →  Fase 1 (estante)  →  Fase 2 (visibilidade)
+                                                  ↘
+                                                   Fase 3 (social)  →  Fase 4 (chat)
 ```
 
-Fases 3 e 4 dependem da identidade estabelecida na Fase 0 e da noção de "dono" da Fase 1.
+A Fase 0 (identidade/sessão) está concluída e destrava as demais. Fases 3 e 4 dependem também da
+noção de "dono" da Fase 1.

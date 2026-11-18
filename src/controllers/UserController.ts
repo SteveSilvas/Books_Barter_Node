@@ -4,11 +4,17 @@ import { LoginType } from '../@types/auth';
 import { CreateUserDTO, UpdateUserDTO } from '../@types/user';
 import { userService } from '../services/UserService';
 import { parseId, parseParam } from '../utils/parseId';
+import { verifyGoogleIdToken } from '../utils/googleAuth';
 
 export class UserController {
     public async list(req: Request, res: Response): Promise<Response> {
         const users = await userService.list();
         return res.status(StatusCodes.OK).json(users);
+    }
+
+    public async me(req: Request, res: Response): Promise<Response> {
+        const user = await userService.getById(req.user!.Id);
+        return res.status(StatusCodes.OK).json(user);
     }
 
     public async getById(req: Request, res: Response): Promise<Response> {
@@ -26,7 +32,7 @@ export class UserController {
     public async create(req: Request, res: Response): Promise<Response> {
         const data: CreateUserDTO = {
             Name: req.body.Name,
-            Birth: req.body.Birth,
+            Birth: req.body.Birth ?? null,
             Email: req.body.Email,
             Pass: req.body.Pass,
         };
@@ -40,6 +46,12 @@ export class UserController {
             Pass: req.body.Pass,
         };
         const result = await userService.login(data);
+        return res.status(StatusCodes.OK).json(result);
+    }
+
+    public async loginWithGoogle(req: Request, res: Response): Promise<Response> {
+        const profile = await verifyGoogleIdToken(req.body.idToken);
+        const result = await userService.loginWithGoogle(profile);
         return res.status(StatusCodes.OK).json(result);
     }
 

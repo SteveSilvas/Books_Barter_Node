@@ -7,15 +7,18 @@ import {
 } from 'sequelize';
 import { sequelize } from '../database';
 
+export type AuthProvider = 'local' | 'google';
+
 export class User extends Model<
     InferAttributes<User>,
     InferCreationAttributes<User>
 > {
     declare Id: CreationOptional<number>;
     declare Name: string;
-    declare Birth: Date;
+    declare Birth: Date | null;
     declare Email: string;
-    declare Pass: string;
+    declare Pass: string | null;
+    declare Provider: CreationOptional<AuthProvider>;
     declare createdAt: CreationOptional<Date>;
     declare updatedAt: CreationOptional<Date>;
 }
@@ -34,7 +37,7 @@ User.init(
         },
         Birth: {
             type: DataTypes.DATE,
-            allowNull: false,
+            allowNull: true,
         },
         Email: {
             type: DataTypes.STRING,
@@ -42,8 +45,14 @@ User.init(
             unique: true,
         },
         Pass: {
+            // Nulo para contas criadas via Google (não há senha local).
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
+        Provider: {
             type: DataTypes.STRING,
             allowNull: false,
+            defaultValue: 'local',
         },
         createdAt: DataTypes.DATE,
         updatedAt: DataTypes.DATE,

@@ -36,15 +36,24 @@ src/
   config/env.ts   leitura/validação de env (DB_NAME, DB_USER, DB_HOST obrigatórios no mysql; PORT padrão 3000; sqlite dispensa credenciais)
   database/       instância do Sequelize (mysql ou sqlite)
   errors/         AppError (message + statusCode)
-  middlewares/    asyncHandler, errorHandler, notFoundHandler
-  utils/          parseId/parseParam (normaliza e valida parâmetros de rota do Express 5)
-  @types/         DTOs por recurso (user, auth, book, category, bookCopy, address)
+  middlewares/    asyncHandler, errorHandler, notFoundHandler, authenticate (JWT)
+  utils/          parseId/parseParam, password (bcrypt), jwt (sign/verify), googleAuth (ID token)
+  @types/         DTOs por recurso (user, auth, book, category, bookCopy, address) + express.d.ts (req.user)
   models/         classes Sequelize tipadas (InferAttributes/InferCreationAttributes)
   services/       regras de negócio; lançam AppError; exportam singleton (ex.: userService)
   controllers/    finos: leem req, montam DTO, respondem com status correto
   routes/         um arquivo *.routes.ts por recurso + index.ts agregador
-tests/            Jest + Supertest (setup-env.ts, helpers/app.ts, *.test.ts)
+tests/            Jest + Supertest (setup-env.ts, helpers/app.ts, helpers/auth.ts, *.test.ts)
 ```
+
+## Autenticação (Regra 1)
+
+- Senhas com **bcrypt** (`src/utils/password.ts`); `Pass` nunca é retornado (`toPublic` em `UserService`).
+- Sessão por **JWT** (`src/utils/jwt.ts`), assinado com `JWT_SECRET`, validade em `JWT_EXPIRES_IN`.
+- `authenticate` (`src/middlewares/authenticate.ts`) exige `Authorization: Bearer <token>` e popula `req.user`.
+- Login Google: `POST /users/google` com `{ idToken }`, validado em `src/utils/googleAuth.ts` contra `GOOGLE_CLIENT_ID`.
+- Rotas de escrita (`POST/PUT/DELETE` de todos os recursos) são protegidas; leituras seguem públicas.
+- Modelo `User`: `Pass` e `Birth` anuláveis; `Provider` (`local`/`google`) registra a origem da conta.
 
 ## Testes
 
