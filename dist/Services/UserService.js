@@ -86,10 +86,24 @@ exports.userService = {
     Update(data) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                let user = yield UserEntity.findByPk(data.Id);
+                const user = yield UserEntity.findByPk(data.Id);
                 if (!user)
                     throw "Usuário não encontrado";
-                // user.
+                if (data.Email && data.Email !== user.Email) {
+                    const emailInUse = yield UserEntity.findOne({
+                        where: { Email: data.Email },
+                    });
+                    if (emailInUse)
+                        throw "Já existe usuário cadastrado com este email.";
+                }
+                if (data.Name !== undefined)
+                    user.Name = data.Name;
+                if (data.Birth !== undefined)
+                    user.Birth = data.Birth;
+                if (data.Email !== undefined)
+                    user.Email = data.Email;
+                if (data.Pass !== undefined)
+                    user.Pass = data.Pass;
                 yield user.save();
                 return user;
             }

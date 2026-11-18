@@ -81,10 +81,20 @@ export const userService: UserService = {
 
     async Update(data: UserType) {
         try {
-            let user: any = await UserEntity.findByPk(data.Id);
+            const user: any = await UserEntity.findByPk(data.Id);
             if (!user) throw "Usuário não encontrado";
 
-            // user.
+            if (data.Email && data.Email !== user.Email) {
+                const emailInUse: UserType = await UserEntity.findOne({
+                    where: { Email: data.Email },
+                });
+                if (emailInUse) throw "Já existe usuário cadastrado com este email.";
+            }
+
+            if (data.Name !== undefined) user.Name = data.Name;
+            if (data.Birth !== undefined) user.Birth = data.Birth;
+            if (data.Email !== undefined) user.Email = data.Email;
+            if (data.Pass !== undefined) user.Pass = data.Pass;
 
             await user.save();
 

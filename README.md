@@ -45,7 +45,7 @@ já foi entregue e do que ainda precisa ser desenvolvido.
 | # | Regra de negócio | Status | O que existe no código hoje |
 |---|------------------|--------|------------------------------|
 | 1 | Acesso autenticado | 🟡 Parcial | Cadastro (`POST /users/add`) e login por e-mail/senha (`POST /users/login`). **Falta** login via Google e sessão/token (hoje o login apenas retorna os dados do usuário). |
-| 2 | Ver e editar perfil | 🟡 Parcial | Consulta por id/e-mail e `PUT /users/update`. O update **não persiste** os campos alterados (apenas chama `save()` sem atribuir os valores) — precisa ser corrigido. |
+| 2 | Ver e editar perfil | ✅ Implementado | Consulta por id/e-mail e `PUT /users/update` (edição de perfil). O update persiste os campos enviados e impede e-mail duplicado. |
 | 3 | Estante digital pública | 🟡 Parcial | Cadastro e listagem de livros (`/books`). **Falta** o vínculo `Book → User` (não há noção de "dono" da estante). |
 | 4 | Visibilidade da estante de outros | 🔴 Pendente | Existe listagem geral de livros, mas **sem filtro por usuário/estante**. |
 | 5 | Seguir / deixar de seguir | 🔴 Pendente | Não implementado (sem entidade de relacionamento entre usuários). |
