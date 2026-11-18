@@ -114,6 +114,7 @@ npx tsc --noEmit
 * **ORM:** Sequelize 6
 * **Banco de Dados:** MySQL (`mysql2`)
 * **Utilitários:** `cors`, `dotenv`, `http-status-codes`
+* **Testes:** Jest + Supertest (SQLite em memória)
 
 ---
 
@@ -164,11 +165,18 @@ npx tsc --noEmit
 │       ├── category.routes.ts
 │       ├── bookCopy.routes.ts
 │       └── address.routes.ts
+├── tests                       # Suíte Jest + Supertest (SQLite em memória)
+│   ├── setup-env.ts
+│   ├── helpers/app.ts
+│   ├── users.test.ts
+│   └── resources.test.ts
 ├── documentation               # Requisitos e diagrama de caso de uso
 ├── dist                        # Saída da compilação (gerada por `npm run build`, ignorada pelo git)
 ├── .env.example                # Modelo das variáveis de ambiente
-├── package.json
-└── tsconfig.json
+├── jest.config.js              # Configuração do Jest
+├── tsconfig.json               # Build de produção (apenas src)
+├── tsconfig.test.json          # Type-check dos testes
+└── package.json
 ```
 
 ---
@@ -322,8 +330,42 @@ criando/atualizando todas as tabelas automaticamente.
 |--------|---------|-----------|
 | `npm run dev`   | `ts-node-dev --respawn --transpile-only ... src/index.ts` | Ambiente de desenvolvimento |
 | `npm run build` | `tsc -p .` | Compila o TypeScript para `dist/` |
-| `npm start`     | `node ./` | Executa o build de produção |
-| `npm test`      | `echo Teste executado com sucesso` | Script de teste (placeholder) |
+| `npm start`     | `node ./dist/index.js` | Executa o build de produção |
+| `npm test`      | `jest --runInBand` | Executa a suíte de testes automatizados |
+| `npm run test:watch` | `jest --watch` | Executa os testes em modo watch |
+
+---
+
+## 🧪 Testes
+
+A suíte usa **Jest + Supertest** e cobre as rotas via requisições HTTP reais contra a aplicação
+Express. Os testes rodam com **SQLite em memória** (dialeto configurado por `DB_DIALECT=sqlite`),
+então **não é necessário ter um MySQL rodando** para executá-los.
+
+```bash
+npm test
+```
+
+Cobertura atual (27 casos): criação/listagem/busca/atualização/remoção de usuários, login válido e
+inválido, e-mail duplicado, id inválido, recurso e rota inexistentes, e o ciclo CRUD completo de
+`books`, `categories`, `book-copies` e `addresses` — verificando os status HTTP esperados
+(`200`, `201`, `204`, `400`, `401`, `404`, `409`).
+
+Estrutura:
+
+```
+tests/
+├── setup-env.ts        # Define DB_DIALECT=sqlite antes de carregar a aplicação
+├── helpers/app.ts      # Cria o app Express com banco sincronizado/limpo
+├── users.test.ts       # Usuários, login, erros e 404
+└── resources.test.ts   # Books, Categories, BookCopies, Addresses
+```
+
+Para checar os tipos dos testes:
+
+```bash
+npx tsc -p tsconfig.test.json
+```
 
 ---
 

@@ -2,19 +2,23 @@
 
 ## Projeto
 
-`bibliotech` (EscamboLiterário) — API REST de escambo de livros.
-Node.js + TypeScript + Express 4 + Sequelize 6 + MySQL (`mysql2`).
+`escambo-literario-api` (EscamboLiterário) — API REST de escambo de livros.
+Node.js + TypeScript + Express 4 + Sequelize 6 + MySQL (`mysql2`); testes com Jest + Supertest + SQLite.
 
 ## Comandos
 
 ```bash
 npm run dev      # ts-node-dev
-npm run build    # tsc -p .
+npm run build    # tsc -p .  (apenas src)
 npm start        # node ./dist/index.js
-npx tsc --noEmit # checagem de tipos sem emitir
+npm test         # jest --runInBand (SQLite em memória, sem MySQL)
+npx tsc --noEmit # checagem de tipos do código-fonte
+npx tsc -p tsconfig.test.json # checagem de tipos dos testes
 ```
 
-Testes de runtime exigem MySQL acessível (use um container `mysql:8`).
+Testes automatizados usam **Jest + Supertest** com SQLite (`DB_DIALECT=sqlite`, configurado em
+`tests/setup-env.ts`), então não exigem MySQL. Testes manuais de runtime exigem MySQL
+(use um container `mysql:8`).
 
 ## Arquitetura (arquivos por camada)
 
@@ -34,7 +38,15 @@ src/
   services/       regras de negócio; lançam AppError; exportam singleton (ex.: userService)
   controllers/    finos: leem req, montam DTO, respondem com status correto
   routes/         um arquivo *.routes.ts por recurso + index.ts agregador
+tests/            Jest + Supertest (setup-env.ts, helpers/app.ts, *.test.ts)
 ```
+
+## Testes
+
+- Integração real via Supertest contra `createApp()`; banco SQLite em memória (`sequelize.sync({ force: true })` por teste).
+- `tests/setup-env.ts` define `DB_DIALECT=sqlite` e `DB_STORAGE` antes de carregar a app.
+- Configuração em `jest.config.js`; type-check em `tsconfig.test.json`.
+- Ao adicionar recurso novo, incluir testes de status HTTP (201/204/400/404/409) em `tests/`.
 
 ## Convenções
 
