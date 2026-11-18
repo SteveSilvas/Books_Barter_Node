@@ -9,6 +9,7 @@ import {
 } from '../@types/user';
 import { AppError } from '../errors/AppError';
 import { User } from '../models';
+import { followService } from './FollowService';
 import { hashPassword, verifyPassword } from '../utils/password';
 import { signToken } from '../utils/jwt';
 import {
@@ -72,7 +73,11 @@ export class UserService implements IUserService {
         if (!user) {
             throw new AppError('Usuário não encontrado.', StatusCodes.NOT_FOUND);
         }
-        return toPublic(user);
+        const [followersCount, followingCount] = await Promise.all([
+            followService.countFollowers(user.Id),
+            followService.countFollowing(user.Id),
+        ]);
+        return { ...toPublic(user), followersCount, followingCount };
     }
 
     public async getByEmail(email: string): Promise<PublicUserType> {

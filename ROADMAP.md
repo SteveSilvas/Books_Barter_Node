@@ -60,7 +60,7 @@ Fundação técnica e recursos de apoio já entregues:
 | CRUD de exemplares (`/book-copies`) | ✅ | `BookCopyService` |
 | CRUD de endereços (`/addresses`) | ✅ | `AddressService` |
 | Middlewares de erro/404 e `AppError` com status HTTP | ✅ | `src/middlewares`, `src/errors` |
-| Suíte de testes de integração (Jest + Supertest, SQLite em memória, 63 casos) | ✅ | `tests/` |
+| Suíte de testes de integração (Jest + Supertest, SQLite em memória, 78 casos) | ✅ | `tests/` |
 | Dialeto duplo MySQL/SQLite por configuração (`DB_DIALECT`) | ✅ | `src/config/env.ts`, `src/database/index.ts` |
 | Documentação (README + AGENTS.md) alinhada ao código | ✅ | `README.md`, `AGENTS.md` |
 
@@ -118,14 +118,16 @@ ver e pesquisar livros por título, sem expor o `UserId` do dono.
 
 ---
 
-### Fase 3 — Recursos sociais (regras 5 e 6) 🔴
+### Fase 3 — Recursos sociais (regras 5 e 6) ✅
 
-- [ ] **Seguir / deixar de seguir** — model `Follow` (`FollowerId`, `FollowingId`) + associações.
-  - `POST /users/:uuid/follow`, `DELETE /users/:uuid/follow`
-  - `GET /users/:uuid/followers`, `GET /users/:uuid/following`
-- [ ] **Favoritar / desfavoritar livros e estantes** — model `Favorite` (`UserId`, `BookId`/`UserId` alvo).
-  - `POST /favorites`, `DELETE /favorites/:uuid`, `GET /users/:uuid/favorites`
-- [ ] Regras de negócio: não seguir a si mesmo; não favoritar duas vezes (409).
+- [x] **Seguir / deixar de seguir** — model `Follow` (`FollowerId`, `FollowingId`, par único).
+  - [x] `POST /users/:uuid/follow`, `DELETE /users/:uuid/follow`
+  - [x] `GET /users/:uuid/followers`, `GET /users/:uuid/following` (paginadas)
+  - [x] Contadores `followersCount`/`followingCount` no perfil público.
+- [x] **Favoritar / desfavoritar** — duas entidades: `FavoriteShelf` (estante) e `FavoriteBook` (livro).
+  - [x] `POST/DELETE /users/:uuid/favorite` (estante) e `POST/DELETE /books/:uuid/favorite` (livro)
+  - [x] `GET /users/me/favorites/shelves` e `GET /users/me/favorites/books` (paginadas, privadas)
+- [x] Regras de negócio: não seguir/favoritar a si mesmo (400); duplicado (409); desfazer inexistente (404).
 
 **Aceite:** o usuário segue/deixa de seguir e favorita/desfavorita, com listagens consultáveis.
 

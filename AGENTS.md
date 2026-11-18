@@ -86,6 +86,18 @@ tests/            Jest + Supertest (setup-env.ts, helpers/app.ts, helpers/auth.t
 - Catálogo e estante de terceiros filtram `$Status.Name$ = 'available'` por padrão; a própria
   estante passa `includeAllStatuses: true`.
 
+## Recursos sociais (Regras 5 e 6)
+
+- `Follow` (`FollowerId` → `FollowingId`), `FavoriteShelf` (`UserId` → `ShelfOwnerId`) e
+  `FavoriteBook` (`UserId` → `BookId`); cada par é único (índice) e as associações ficam nos models.
+- `FollowService`: seguir/deixar de seguir e listas paginadas (`listFollowers`/`listFollowing`),
+  mais `countFollowers`/`countFollowing` (usados no perfil público `GET /users/:uuid`).
+- `FavoriteService`: favoritar estante (`/users/:uuid/favorite`) e livro (`/books/:uuid/favorite`);
+  listas privadas em `/users/me/favorites/{shelves,books}`.
+- Regras: alvo inexistente → 404; seguir/favoritar a si mesmo → 400; duplicado → 409;
+  desfazer inexistente → 404; sem token → 401.
+- `BookService.findManyByIds` e `BookService.resolveBookId` dão suporte aos favoritos de livro.
+
 ## Testes
 
 - Integração real via Supertest contra `createApp()`; banco SQLite em memória (`sequelize.sync({ force: true })` por teste).

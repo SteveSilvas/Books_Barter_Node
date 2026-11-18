@@ -37,12 +37,19 @@ export type BookSortField = (typeof BOOK_SORT_FIELDS)[number];
 export type SortOrder = 'asc' | 'desc';
 
 export interface SortSpec {
-    field: BookSortField;
+    field: string;
     order: SortOrder;
 }
 
 const DEFAULT_SORT_FIELD: BookSortField = 'createdAt';
 const DEFAULT_SORT_ORDER: SortOrder = 'desc';
+
+/** Opções da allowlist de ordenação (defaults: campos de livro). */
+export interface SortOptions {
+    fields?: readonly string[];
+    defaultField?: string;
+    defaultOrder?: SortOrder;
+}
 
 const BOOK_STATUS_NAMES = BOOK_STATUS_SEED.map((status) => status.Name);
 
@@ -99,22 +106,30 @@ export function buildPageMeta(
 }
 
 /** Lê `sort`/`order` (allowlist) com defaults `createdAt desc`. */
-export function parseSort(sortRaw: QueryValue, orderRaw: QueryValue): SortSpec {
+export function parseSort(
+    sortRaw: QueryValue,
+    orderRaw: QueryValue,
+    options: SortOptions = {},
+): SortSpec {
+    const fields = options.fields ?? BOOK_SORT_FIELDS;
+    const defaultField = options.defaultField ?? DEFAULT_SORT_FIELD;
+    const defaultOrder = options.defaultOrder ?? DEFAULT_SORT_ORDER;
+
     const sortValue = single(sortRaw, 'sort');
     const orderValue = single(orderRaw, 'order');
 
-    let field: BookSortField = DEFAULT_SORT_FIELD;
+    let field: string = defaultField;
     if (sortValue !== undefined) {
-        if (!BOOK_SORT_FIELDS.includes(sortValue as BookSortField)) {
+        if (!fields.includes(sortValue)) {
             throw new AppError(
-                `sort inválido: use um de ${BOOK_SORT_FIELDS.join(', ')}.`,
+                `sort inválido: use um de ${fields.join(', ')}.`,
                 StatusCodes.BAD_REQUEST,
             );
         }
-        field = sortValue as BookSortField;
+        field = sortValue;
     }
 
-    let order: SortOrder = DEFAULT_SORT_ORDER;
+    let order: SortOrder = defaultOrder;
     if (orderValue !== undefined) {
         if (orderValue !== 'asc' && orderValue !== 'desc') {
             throw new AppError(

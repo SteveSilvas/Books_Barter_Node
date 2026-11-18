@@ -4,6 +4,9 @@ import { Book } from './Book';
 import { BookCopy } from './BookCopy';
 import { BookStatus, BOOK_STATUS_SEED } from './BookStatus';
 import { Category } from './Category';
+import { FavoriteBook } from './FavoriteBook';
+import { FavoriteShelf } from './FavoriteShelf';
+import { Follow } from './Follow';
 import { User } from './User';
 
 /**
@@ -25,4 +28,15 @@ export async function seedBookStatuses(): Promise<void> {
     }
 }
 
-export { sequelize, Address, Book, BookCopy, BookStatus, Category, User };
+export {
+    sequelize,
+    Address,
+    Book,
+    BookCopy,
+    BookStatus,
+    Category,
+    FavoriteBook,
+    FavoriteShelf,
+    Follow,
+    User,
+};

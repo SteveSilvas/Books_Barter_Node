@@ -27,6 +27,9 @@ export interface IBookService {
         sort?: SortSpec,
     ): Promise<Paged<BookType>>;
     getByUuid(uuid: string): Promise<BookType>;
+    findManyByIds(ids: number[]): Promise<Map<number, BookType>>;
+    resolveBookId(uuid: string): Promise<number>;
+    findOwnerIdByBookUuid(uuid: string): Promise<number | null>;
     create(userId: number, data: CreateBookDTO): Promise<BookType>;
     update(userId: number, uuid: string, data: UpdateBookDTO): Promise<BookType>;
     remove(userId: number, uuid: string): Promise<void>;
@@ -42,7 +45,7 @@ const DEFAULT_PAGINATION: Pagination = { limit: 20, offset: 0 };
 const DEFAULT_SORT: SortSpec = { field: 'createdAt', order: 'desc' };
 
 /** Projeção pública: sem `Id` interno e sem `UserId` (dono só pelo nome). */
-function toPublic(book: Book): BookType {
+export function toPublicBook(book: Book): BookType {
     const raw = book.get({ plain: true }) as unknown as Record<string, any>;
     return {
         Uuid: raw.Uuid,
@@ -120,14 +123,41 @@ export class BookService implements IBookService {
         });
 
         return {
-            data: rows.map(toPublic),
+            data: rows.map(toPublicBook),
             meta: buildPageMeta(count, pagination, rows.length),
         };
     }
 
     public async getByUuid(uuid: string): Promise<BookType> {
         const book = await this.findByUuid(uuid);
-        return toPublic(book);
+        return toPublicBook(book);
+    }
+
+    /** Livros públicos indexados pelo id interno (usado nos favoritos). */
+    public async findManyByIds(ids: number[]): Promise<Map<number, BookType>> {
+        if (ids.length === 0) {
+            return new Map();
+        }
+        const books = await Book.findAll({
+            where: { Id: { [Op.in]: ids } },
+            include: INCLUDE,
+        });
+        return new Map(books.map((book) => [book.Id, toPublicBook(book)]));
+    }
+
+    /** Id interno do livro a partir do UUID (para favoritar). */
+    public async resolveBookId(uuid: string): Promise<number> {
+        const book = await Book.findOne({ where: { Uuid: uuid }, attributes: ['Id'] });
+        if (!book) {
+            throw new AppError('Livro não encontrado.', StatusCodes.NOT_FOUND);
+        }
+        return book.Id;
+    }
+
+    /** Dono (id interno) do livro; `null` se o livro não existir. */
+    public async findOwnerIdByBookUuid(uuid: string): Promise<number | null> {
+        const book = await Book.findOne({ where: { Uuid: uuid }, attributes: ['UserId'] });
+        return book ? book.UserId : null;
     }
 
     public async create(userId: number, data: CreateBookDTO): Promise<BookType> {
@@ -145,7 +175,7 @@ export class BookService implements IBookService {
         });
 
         const created = await this.findByUuid(book.Uuid);
-        return toPublic(created);
+        return toPublicBook(created);
     }
 
     public async update(
@@ -171,7 +201,7 @@ export class BookService implements IBookService {
 
         await book.save();
         const updated = await this.findByUuid(uuid);
-        return toPublic(updated);
+        return toPublicBook(updated);
     }
 
     public async remove(userId: number, uuid: string): Promise<void> {

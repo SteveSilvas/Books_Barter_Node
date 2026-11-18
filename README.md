@@ -51,8 +51,8 @@ já foi entregue e do que ainda precisa ser desenvolvido.
 | 2 | Ver e editar perfil | ✅ Implementado | `GET /users/me` (perfil próprio) e `PUT /users/me` (edição parcial com validação de nome/e-mail/data). Troca de senha exige a senha atual. `PUT/DELETE /users/:uuid` só permitem o **próprio** usuário (403 caso contrário). Perfis de terceiros são públicos **sem e-mail**. |
 | 3 | Estante digital | ✅ Implementado | Cada livro tem dono (`Book.UserId`) e status. **Estante pessoal privada** em `GET /users/me/books` (só o dono) e **catálogo público** em `GET /books?title=` (ver e pesquisar). CRUD do livro restrito ao dono (403 caso contrário). |
 | 4 | Visibilidade da estante de outros | ✅ Implementado | Catálogo público **paginado** (`?limit&offset`), **ordenável** (`?sort&order`) e **filtrável** (`?title&categoryUuid&status&ownerUuid`), listando só livros `available`. Estante pública de terceiros em `GET /users/:uuid/books`. Respostas em envelope `{ data, meta }`, sem expor `UserId`. |
-| 5 | Seguir / deixar de seguir | 🔴 Pendente | Não implementado (sem entidade de relacionamento entre usuários). |
-| 6 | Favoritar / desfavoritar | 🔴 Pendente | Não implementado (sem entidade de favoritos). |
+| 5 | Seguir / deixar de seguir | ✅ Implementado | Model `Follow` (`FollowerId`/`FollowingId`, par único). `POST/DELETE /users/:uuid/follow` (🔒) e listagens `GET /users/:uuid/followers` e `/following` (paginadas). Não seguir a si mesmo (400), duplicado (409). Contadores `followersCount`/`followingCount` no perfil público. |
+| 6 | Favoritar / desfavoritar | ✅ Implementado | Duas entidades: `FavoriteShelf` (estante) e `FavoriteBook` (livro). `POST/DELETE /users/:uuid/favorite` e `POST/DELETE /books/:uuid/favorite` (🔒). Listagens privadas `GET /users/me/favorites/shelves` e `/books` (paginadas). Não favoritar o próprio item (400), duplicado (409). |
 | 7 | Chat de negociação | 🔴 Pendente | Não implementado (sem entidades de conversa/mensagem). |
 
 **Legenda:** ✅ implementado · 🟡 parcial · 🔴 pendente.
@@ -229,6 +229,16 @@ Rotas marcadas com 🔒 exigem autenticação (`Authorization: Bearer <token>`).
 | GET | `/books/:uuid` | Detalhe público de um livro | — |
 | GET 🔒 | `/users/me/books` | Estante **pessoal** do usuário autenticado (todos os status) | — |
 | GET | `/users/:uuid/books` | Estante **pública** de outro usuário (só `available`; mesma paginação) | — |
+| POST 🔒 | `/users/:uuid/follow` | Segue o usuário (400 se for você mesmo; 409 se já segue) | — |
+| DELETE 🔒 | `/users/:uuid/follow` | Deixa de seguir (404 se não segue) | — |
+| GET | `/users/:uuid/followers` | Seguidores do usuário (paginado) | — |
+| GET | `/users/:uuid/following` | Quem o usuário segue (paginado) | — |
+| POST 🔒 | `/users/:uuid/favorite` | Favorita a **estante** do usuário (400 próprio; 409 duplicado) | — |
+| DELETE 🔒 | `/users/:uuid/favorite` | Desfavorita a estante (404 se não favoritou) | — |
+| POST 🔒 | `/books/:uuid/favorite` | Favorita um **livro** (400 próprio; 409 duplicado) | — |
+| DELETE 🔒 | `/books/:uuid/favorite` | Desfavorita o livro (404 se não favoritou) | — |
+| GET 🔒 | `/users/me/favorites/shelves` | Estantes que o usuário favoritou (paginado) | — |
+| GET 🔒 | `/users/me/favorites/books` | Livros que o usuário favoritou (paginado) | — |
 | POST 🔒 | `/books` | Cadastra um livro (dono = usuário do token) | `{ Title, Autor, CategoryUuid, Status?, CreationDate?, CreationLocality? }` |
 | PUT 🔒 | `/books/:uuid` | Atualiza um livro (**só o dono**; 403 se for de outro) | `{ Title?, Autor?, CategoryUuid?, Status?, CreationDate?, CreationLocality? }` |
 | DELETE 🔒 | `/books/:uuid` | Remove um livro (**só o dono**; 403 se for de outro) | — |
@@ -385,6 +395,44 @@ curl "http://localhost:3000/books?categoryUuid=<uuid>&ownerUuid=<uuid>"
 curl "http://localhost:3000/users/<uuid>/books?limit=5"
 ```
 
+### Seguir e favoritar (Regras 5 e 6)
+
+**Seguir (Regra 5)** é uma relação entre **usuários** (donos). **Favoritar (Regra 6)** tem duas
+entidades distintas: favoritar uma **estante** (o dono) e favoritar um **livro** individualmente.
+
+```bash
+# seguir / deixar de seguir
+curl -X POST   http://localhost:3000/users/<uuid>/follow -H "Authorization: Bearer <jwt>"
+curl -X DELETE http://localhost:3000/users/<uuid>/follow -H "Authorization: Bearer <jwt>"
+
+# seguidores e quem segue (paginado, mesmo envelope da Regra 4)
+curl "http://localhost:3000/users/<uuid>/followers?limit=10&offset=0&sort=Name&order=asc"
+curl "http://localhost:3000/users/<uuid>/following"
+
+# favoritar / desfavoritar uma estante
+curl -X POST   http://localhost:3000/users/<uuid>/favorite -H "Authorization: Bearer <jwt>"
+curl -X DELETE http://localhost:3000/users/<uuid>/favorite -H "Authorization: Bearer <jwt>"
+
+# favoritar / desfavoritar um livro
+curl -X POST   http://localhost:3000/books/<uuid>/favorite -H "Authorization: Bearer <jwt>"
+curl -X DELETE http://localhost:3000/books/<uuid>/favorite -H "Authorization: Bearer <jwt>"
+
+# minhas listas privadas de favoritos
+curl http://localhost:3000/users/me/favorites/shelves -H "Authorization: Bearer <jwt>"
+curl http://localhost:3000/users/me/favorites/books   -H "Authorization: Bearer <jwt>"
+```
+
+Regras de negócio:
+
+- Seguir a si mesmo ou favoritar a **própria** estante/livro → **400**.
+- Repetir uma ação já existente (seguir/favoritar duas vezes) → **409**.
+- Desfazer algo que não existe (deixar de seguir / desfavoritar) → **404**.
+- Todas as rotas de ação exigem autenticação (**401** sem token).
+- As listagens de relacionamento e favoritos usam o **mesmo envelope paginado** da Regra 4
+  (`?limit&offset`, `?sort&order`). As listagens de favoritos são **privadas** (só o próprio
+  usuário); as listagens de seguir/seguidores são públicas.
+- `GET /users/:uuid` inclui `followersCount` e `followingCount`.
+
 ### Formato de erro
 
 Erros retornam o status HTTP adequado e um corpo padronizado:
@@ -507,7 +555,7 @@ executá-los.
 npm test
 ```
 
-Cobertura atual (63 casos): criação/listagem/busca/atualização/remoção de usuários, login válido e
+Cobertura atual (78 casos): criação/listagem/busca/atualização/remoção de usuários, login válido e
 inválido, senha com hash (não em texto puro), **token JWT** e rotas protegidas (401 sem token/token
 inválido), **perfil próprio vs. público** (e-mail oculto de terceiros), edição de perfil com
 validação (nome/e-mail/data), **troca de senha** (senha atual obrigatória), **posse do recurso**
@@ -517,8 +565,9 @@ público com busca por título** e sem vazamento de `UserId`, **status do livro*
 troca para `reserved`/`traded`, 400 para inexistente), `Uuid` inválido (400) e inexistente (404),
 e-mail duplicado, recurso e rota inexistentes, **catálogo paginado** (`limit`/`offset` + metadados),
 **ordenação** (allowlist, 400 fora dela), **filtros** (categoria/status/dono), **estante pública de
-terceiros** (por UUID, 400/404), e o ciclo CRUD completo de `books`, `categories`, `book-copies` e
-`addresses` — verificando os status HTTP esperados
+terceiros** (por UUID, 400/404), **seguir/deixar de seguir** (listas paginadas, contadores, 400/401/404/409),
+**favoritar estantes e livros** (listas privadas, 400/401/404/409), e o ciclo CRUD completo de `books`,
+`categories`, `book-copies` e `addresses` — verificando os status HTTP esperados
 (`200`, `201`, `204`, `400`, `401`, `403`, `404`, `409`).
 
 Estrutura:

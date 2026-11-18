@@ -16,6 +16,9 @@ export interface PublicUserType {
     Uuid: string;
     Name: string;
     Provider: AuthProvider;
+    /** Preenchido apenas no detalhe do perfil (`GET /users/:uuid`). */
+    followersCount?: number;
+    followingCount?: number;
 }
 
 export interface CreateUserDTO {
