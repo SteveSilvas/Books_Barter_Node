@@ -21,19 +21,20 @@ Legenda de status:
   (`InferAttributes` / `InferCreationAttributes`) definem tabelas, colunas, tipos e associações.
 * O banco é **derivado dos models**, não o contrário. Não há modelagem SQL-first nem escrita
   manual de DDL como origem.
-* Hoje a criação/atualização do schema usa `sequelize.sync()` na inicialização (`src/index.ts`).
-  Para evoluir com segurança, as migrações serão **geradas a partir dos models** (ver Fase 0),
-  mantendo o model como ponto único de definição.
+* A criação/atualização do schema usa **migrações versionadas** (Umzug) na inicialização
+  (`src/index.ts`), com os models como ponto único de definição. Novas mudanças de schema entram
+  como migrações (ver [Banco de dados e migrações](./README.md#️-banco-de-dados-e-migrações)).
 * Toda nova entidade (ex.: `Follow`, `Favorite`, `Conversation`, `Message`) nasce como model
   tipado + DTO + service + controller + rota + testes, seguindo a arquitetura em camadas já
   estabelecida.
 
 Consequências práticas:
 
-* Alterar o domínio = alterar o model; o schema acompanha.
-* `sync()` é aceitável em dev/teste (SQLite em memória). Em produção, migrações versionadas.
-* Testes de integração criam o schema a partir dos models (`sequelize.sync({ force: true })`),
-  o que mantém o banco de teste sempre alinhado ao código.
+* Alterar o domínio = alterar o model; o schema acompanha via nova migração.
+* `sync()` fica restrito a cenários pontuais de dev/teste (SQLite em memória). Em produção e no
+  bootstrap, o schema é aplicado por migrações versionadas.
+* Testes de integração recriam o schema a partir das mesmas migrações de produção
+  (`runMigrations()`), o que mantém o banco de teste sempre alinhado ao código.
 
 ---
 
@@ -79,12 +80,12 @@ Cada regra recebe uma fase, com tarefas acionáveis e critérios de aceite.
 - [x] **Login com Google** via verificação de ID token (`POST /users/google`).
 - [x] Middleware de autorização: rotas de escrita exigem usuário autenticado.
 - [x] Respostas `401` para token ausente/inválido; senha nunca retornada.
-- [ ] Migrações versionadas **geradas a partir dos models** (Code First), substituindo `sync()` em produção. *(transversal — ver Dívidas técnicas)*
+- [x] Migrações versionadas (Umzug) aplicadas no bootstrap, com scripts `npm run migrate` / `migrate:down` / `migrate:status` e CLI `create`. *(transversal — ver Dívidas técnicas)*
 
 **Aceite atendido:** cadastro/loga com senha em hash, recebe um token e acessa rotas protegidas;
 login via Google validado no backend.
 
-**Pendência desta fase:** migrações versionadas (item transversal, não bloqueia as demais fases).
+**Pendência desta fase:** nenhuma (migrações versionadas concluídas).
 
 ---
 
@@ -147,7 +148,7 @@ ver e pesquisar livros por título, sem expor o `UserId` do dono.
 
 ## 🧱 Dívidas técnicas e melhorias transversais
 
-- [ ] Migrações versionadas (Code First) e script `npm run db:migrate`.
+- [x] Migrações versionadas (Umzug) e scripts `npm run migrate` / `migrate:down` / `migrate:status` (+ `migrate:prod`).
 - [ ] Validação de entrada (ex.: `zod`/`class-validator`) antes de chegar ao service.
 - [ ] Hashing de senha e remoção de dados sensíveis das respostas (`Pass` nunca retornar).
 - [ ] Paginação/filtros padronizados na listagem.

@@ -1,13 +1,15 @@
 import { Express } from 'express';
 import { createApp } from '../../src/app';
+import { runMigrations } from '../../src/database/migrator';
 import { seedBookStatuses, sequelize } from '../../src/models';
 
 /**
- * Cria uma instância do Express com o banco de teste já sincronizado e limpo.
- * Usa SQLite (configurado em tests/setup-env.ts), sem depender de MySQL.
+ * Cria uma instância do Express com o banco de teste recriado pelas mesmas
+ * migrações usadas em produção (SQLite, configurado em tests/setup-env.ts).
  */
 export async function createTestApp(): Promise<Express> {
-    await sequelize.sync({ force: true });
+    await sequelize.getQueryInterface().dropAllTables();
+    await runMigrations();
     await seedBookStatuses();
     return createApp();
 }

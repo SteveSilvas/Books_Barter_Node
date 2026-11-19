@@ -1,10 +1,12 @@
 import { createApp } from './app';
 import { env } from './config/env';
-import { sequelize, syncDatabase } from './models';
+import { runMigrations } from './database/migrator';
+import { seedBookStatuses, sequelize } from './models';
 
 async function bootstrap(): Promise<void> {
     await sequelize.authenticate();
-    await syncDatabase();
+    await runMigrations();
+    await seedBookStatuses();
 
     const app = createApp();
 

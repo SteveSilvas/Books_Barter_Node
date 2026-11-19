@@ -10,15 +10,9 @@ import { Follow } from './Follow';
 import { User } from './User';
 
 /**
- * Garante que todos os models estão registrados na conexão antes de
- * sincronizar o schema. As associações são declaradas nos próprios models.
+ * Insere os status de livro padrão, ignorando os que já existem.
+ * O schema é gerenciado por migrações (`src/database/migrator.ts`).
  */
-export async function syncDatabase(): Promise<void> {
-    await sequelize.sync();
-    await seedBookStatuses();
-}
-
-/** Insere os status de livro padrão, ignorando os que já existem. */
 export async function seedBookStatuses(): Promise<void> {
     for (const status of BOOK_STATUS_SEED) {
         await BookStatus.findOrCreate({

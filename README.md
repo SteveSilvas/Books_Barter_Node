@@ -95,6 +95,7 @@ npx tsc --noEmit
 * **Linguagem:** TypeScript 7 (`strict: true`), compilado com `tsc` e executado em dev com `tsx`
 * **Framework HTTP:** Express 5
 * **ORM:** Sequelize 6
+* **Migrações:** Umzug 3 (migrator oficial do time do Sequelize)
 * **Banco de Dados:** PostgreSQL (`pg`) ou MySQL (`mysql2`); SQLite nos testes
 * **Utilitários:** `cors`, `dotenv`, `http-status-codes`
 * **Autenticação:** `jsonwebtoken` (JWT), `bcryptjs` (hash de senha), `google-auth-library` (login Google)
@@ -107,13 +108,17 @@ npx tsc --noEmit
 ```
 .
 ├── src
-│   ├── index.ts                # Bootstrap: conecta no banco, sincroniza e sobe o servidor
+│   ├── index.ts                # Bootstrap: conecta no banco, roda migrações e sobe o servidor
 │   ├── app.ts                  # Cria e configura a instância do Express
 │   ├── @types                  # DTOs e tipos (user, auth, book, category, bookCopy, address) + express.d.ts
 │   ├── config
 │   │   └── env.ts              # Leitura e validação das variáveis de ambiente
 │   ├── database
-│   │   └── index.ts            # Instância do Sequelize (conexão)
+│   │   ├── index.ts            # Instância do Sequelize (conexão)
+│   │   ├── migrator.ts         # Migrator (Umzug) e runMigrations()
+│   │   └── migrations          # Migrações versionadas do schema
+│   ├── scripts
+│   │   └── migrate.ts          # CLI de migrações (up / down / status / create)
 │   ├── errors
 │   │   └── AppError.ts         # Erro de aplicação com código HTTP
 │   ├── middlewares
@@ -129,7 +134,7 @@ npx tsc --noEmit
 │   │   ├── jwt.ts              # Assinatura e verificação de token (JWT)
 │   │   └── googleAuth.ts       # Valida o ID token do Google
 │   ├── models                  # Models Sequelize tipados
-│   │   ├── index.ts            # Barrel + syncDatabase()
+│   │   ├── index.ts            # Barrel + seedBookStatuses()
 │   │   ├── User.ts
 │   │   ├── Book.ts
 │   │   ├── Category.ts
@@ -436,8 +441,9 @@ rotas usam sempre o `Uuid`; o `Id` fica apenas como constraint/chave interna.
 * **BookCopy:** `Uuid`, `ISBN`, `Editora`, `TypePrint`, `PublicationDate`, `PublicationLocality`
 * **Address:** `Uuid`, `Rua`, `Numero`, `Complemento`, `Bairro`, `Cep`, `Cidade`, `Estado`, `Pais`
 
-Na inicialização (`src/index.ts`), a aplicação chama `sequelize.authenticate()` e `sequelize.sync()`,
-criando/atualizando todas as tabelas automaticamente.
+Na inicialização (`src/index.ts`), a aplicação chama `sequelize.authenticate()` e roda as
+**migrações** pendentes (`runMigrations()`), garantindo o schema antes de subir o servidor. Veja
+[Banco de dados e migrações](#️-banco-de-dados-e-migrações) para o fluxo completo.
 
 ---
 
@@ -519,9 +525,80 @@ criando/atualizando todas as tabelas automaticamente.
 | `npm run dev`   | `tsx watch src/index.ts` | Ambiente de desenvolvimento (reload automático) |
 | `npm run build` | `tsc -p .` | Compila o TypeScript para `dist/` |
 | `npm start`     | `node ./dist/index.js` | Executa o build de produção |
+| `npm run migrate` | `tsx src/scripts/migrate.ts up` | Aplica todas as migrações pendentes |
+| `npm run migrate:down` | `tsx src/scripts/migrate.ts down` | Reverte a última migração aplicada |
+| `npm run migrate:status` | `tsx src/scripts/migrate.ts status` | Lista migrações aplicadas e pendentes |
+| `npm run migrate:prod` | `node ./dist/scripts/migrate.js up` | Aplica migrações no build de produção |
 | `npm test`      | `jest --runInBand` | Executa a suíte de testes automatizados |
 | `npm run test:watch` | `jest --watch` | Executa os testes em modo watch |
 | `npm run typecheck` | `tsc -p tsconfig.test.json` | Checa os tipos de `src` e `tests` |
+
+---
+
+## 🗄️ Banco de dados e migrações
+
+O schema é versionado com **migrações** ([Umzug](https://github.com/sequelize/umzug), o migrator
+oficial do time do Sequelize). O bootstrap da API (`src/index.ts`) executa as migrações pendentes
+automaticamente ao subir, então em produção **não é preciso rodar nada à mão**.
+
+### Fluxo do dia a dia
+
+```bash
+# Aplicar todas as migrações pendentes
+npm run migrate
+
+# Ver o que já foi aplicado e o que está pendente
+npm run migrate:status
+
+# Reverter a última migração aplicada
+npm run migrate:down
+
+# Criar um novo arquivo de migração (gera um scaffold no padrão do projeto)
+npx tsx src/scripts/migrate.ts create add-telefone-usuario
+```
+
+O `create` gera um arquivo `src/database/migrations/<timestamp>.add-telefone-usuario.ts` com o
+esqueleto `up`/`down` já tipado. Basta preencher as alterações:
+
+```ts
+import { DataTypes } from 'sequelize';
+import type { Migration } from '../migrator';
+
+export const up: Migration = async ({ context }) => {
+    await context.queryInterface.addColumn('Users', 'Telefone', {
+        type: DataTypes.STRING,
+        allowNull: true,
+    });
+};
+
+export const down: Migration = async ({ context }) => {
+    await context.queryInterface.removeColumn('Users', 'Telefone');
+};
+```
+
+Assim, **alterar o schema depois** (adicionar/remover colunas, tabelas, índices) é só criar uma
+nova migração — sem recriar as tabelas nem perder dados.
+
+### Migração inicial e bancos já existentes
+
+A migração `0001-create-initial-schema` cria as 9 tabelas do projeto. Ela é **idempotente**: se o
+banco já tem o schema (por exemplo, um banco antigo criado com `sequelize.sync`), a migração apenas
+registra que foi aplicada, **sem** recriar nada. Isso permite adotar migrações em bases existentes
+com segurança.
+
+### Comandos em produção
+
+No build de produção, use `npm run migrate:prod` (ou deixe o próprio `npm start` aplicar as
+migrações pendentes ao subir):
+
+```bash
+npm run build          # gera dist/ (inclui as migrações compiladas)
+npm run migrate:prod   # aplica as migrações pendentes
+npm start              # sobe a API (também aplica pendentes automaticamente)
+```
+
+As migrações aplicadas ficam registradas na tabela `SequelizeMeta`, que guarda o histórico do que
+já rodou em cada banco.
 
 ---
 
@@ -558,7 +635,7 @@ Estrutura:
 tests/
 ├── setup-env.ts        # Define DB_DIALECT=sqlite antes de carregar a aplicação
 ├── helpers
-│   ├── app.ts          # Cria o app Express com banco sincronizado/limpo
+│   ├── app.ts          # Cria o app Express com banco recriado pelas migrações
 │   └── auth.ts         # Cadastra/loga e devolve o token para requisições autenticadas
 ├── users.test.ts       # Usuários, autenticação, login, posse e erros
 └── resources.test.ts   # Books (catálogo, estante, posse, status), Categories, BookCopies, Addresses
